@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+
+{% block title %}{% if student %}Edit Student {{ student.id }}{% else %}New Student{% endif %} - TECH5{% endblock %}
+
+{% block content %}
+<div class="card" style="max-width: 750px; margin: 0 auto;">
+  <div class="card-header">
+    <h2 class="card-title">{% if student %}Edit Student: {{ student.display_name }} ({{ student.id }}){% else %}Create New Student{% endif %}</h2>
+    <a href="{{ url_for('visualization_web.list_students') }}" class="btn btn-sm btn-secondary">&larr; Back to Roster</a>
+  </div>
+
+  <div class="card-body">
+    <form action="{% if student %}{{ url_for('visualization_web.update_student', student_id=student.id) }}{% else %}{{ url_for('visualization_web.create_student') }}{% endif %}" method="POST">
+      <div class="grid-2">
+        <div class="form-group">
+          <label class="form-label" for="id">Student ID / Anonymous Identifier:</label>
+          <input type="text" id="id" name="id" class="form-control" value="{{ student.id if student else '' }}" required {% if student %}readonly style="background: #f1f5f9;"{% endif %} placeholder="e.g. S11">
+          <span class="form-hint">Unique identifier for cohort tracking.</span>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="display_name">Display Name:</label>
+          <input type="text" id="display_name" name="display_name" class="form-control" value="{{ student.display_name if student else '' }}" required placeholder="e.g. Maria Hansen">
+        </div>
+      </div>
+
+      <div class="form-group" style="margin-top: 1rem;">
+        <label class="form-label">Skill Proficiencies (0 = None, 1 = Beginner, 5 = Master):</label>
+        <div style="background: #f8fafc; border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 1rem; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
+          {% for sk in skills %}
+            <div>
+              <label style="font-size: 0.85rem; font-weight: 600; display: block; margin-bottom: 0.25rem;">
+                {{ sk.name }} (<code>{{ sk.id }}</code>):
+              </label>
+              <input type="number" name="skill_{{ sk.id }}" min="0" max="5" class="form-control"
+                     value="{{ student.get_skill_level(sk.id) if student else 0 }}">
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+
+      <div class="form-group" style="margin-top: 1rem;">
+        <label class="form-label" for="preferences_text">Ranked Project Preferences:</label>
+        {% set pref_str = student.preferences|map(attribute='project_id')|join(', ') if student else '' %}
+        <input type="text" id="preferences_text" name="preferences_text" class="form-control" value="{{ pref_str }}" placeholder="{% if projects %}e.g. {{ projects[:3]|map(attribute='id')|join(', ') }}{% else %}No projects available{% endif %}">
+        <span class="form-hint">
+          {% if projects %}
+            Enter project IDs in order of preference (1st choice, 2nd choice, etc.), separated by commas.
+            Available projects: {% for p in projects %}<code>{{ p.id }}</code> ({{ p.title }}){% if not loop.last %}, {% endif %}{% endfor %}.
+          {% else %}
+            <span style="color: var(--danger); font-weight: 600;">Notice: No projects exist in the catalog yet. Create projects first before assigning preferences.</span>
+          {% endif %}
+        </span>
+      </div>
+
+      <div style="display: flex; gap: 1rem; margin-top: 1.5rem;">
+        <button type="submit" class="btn btn-primary" style="flex: 1;">
+          {% if student %}Save Changes{% else %}Create Student{% endif %}
+        </button>
+        <a href="{{ url_for('visualization_web.list_students') }}" class="btn btn-secondary">Cancel</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

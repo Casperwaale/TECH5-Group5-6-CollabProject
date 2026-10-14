@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+
+{% block title %}Fixed Assignments - TECH5{% endblock %}
+
+{% block content %}
+<div class="alert alert-info">
+  <strong>Section 11 Principle:</strong> Fixed assignments are hard inputs to the mathematical engine, not cosmetic dashboard filters. The engine strictly preserves every valid fixed assignment across all generated alternative solutions. Changing fixed constraints requires a new run.
+</div>
+
+<div class="grid-2">
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title">Active Fixed Pre-allocations</h2>
+      <span class="badge badge-primary">{{ fixed_assignments|length }} locked</span>
+    </div>
+    <div class="card-body">
+      {% if fixed_assignments %}
+        <div class="table-responsive">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Student</th>
+                <th>Designated Project</th>
+                <th>Status</th>
+                <th>Reason / Justification</th>
+                {% if can_edit %}<th>Action</th>{% endif %}
+              </tr>
+            </thead>
+            <tbody>
+              {% for fa in fixed_assignments %}
+                <tr>
+                  <td><strong>{{ fa.student_id }}</strong></td>
+                  <td><span class="badge badge-primary">{{ fa.project_id }}</span></td>
+                  <td><span class="badge badge-success">{{ fa.status }}</span></td>
+                  <td><small>{{ fa.reason or 'Administrative allocation' }}</small></td>
+                  {% if can_edit %}
+                    <td>
+                      <form action="{{ url_for('visualization_web.delete_fixed_assignment', student_id=fa.student_id) }}" method="POST" onsubmit="return confirm('Remove fixed assignment for student {{ fa.student_id }}?');">
+                        <button type="submit" class="btn btn-sm btn-danger">Release</button>
+                      </form>
+                    </td>
+                  {% endif %}
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <p style="color: var(--text-muted); text-align: center; padding: 2rem 0;">
+          No fixed assignments currently defined. Use the form on the right to lock a student to a specific project.
+        </p>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title">+ Add Fixed Assignment Constraint</h2>
+    </div>
+    <div class="card-body">
+      {% if can_edit %}
+        <form action="{{ url_for('visualization_web.create_fixed_assignment') }}" method="POST">
+          <div class="form-group">
+            <label class="form-label" for="student_id">Select Student:</label>
+            <select name="student_id" id="student_id" class="form-control" required>
+              <option value="">-- Choose Student --</option>
+              {% for s in students %}
+                <option value="{{ s.id }}">{{ s.display_name }} ({{ s.id }})</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="project_id">Select Designated Project:</label>
+            <select name="project_id" id="project_id" class="form-control" required>
+              <option value="">-- Choose Project --</option>
+              {% for p in projects %}
+                <option value="{{ p.id }}">{{ p.title }} ({{ p.id }} - Max {{ p.max_capacity }})</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="status">Administrative Status:</label>
+            <select name="status" id="status" class="form-control">
+              <option value="APPROVED" selected>APPROVED</option>
+              <option value="MANDATORY">MANDATORY</option>
+              <option value="CONDITIONAL">CONDITIONAL</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="reason">Reason / Regulatory Note:</label>
+            <textarea name="reason" id="reason" class="form-control" rows="2" placeholder="e.g. Sponsored corporate fellowship, pre-matched thesis agreement..."></textarea>
+          </div>
+
+          <button type="submit" class="btn btn-primary" style="width: 100%;">
+            Lock Assignment Constraint
+          </button>
+        </form>
+      {% else %}
+        <div class="alert alert-warning">
+          Only Administrators can add or remove fixed assignment constraints.
+        </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

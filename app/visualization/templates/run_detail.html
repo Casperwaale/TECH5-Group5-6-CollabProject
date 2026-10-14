@@ -1,0 +1,157 @@
+{% extends "base.html" %}
+
+{% block title %}Optimization Run Details - TECH5{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="card-header">
+    <div>
+      <h2 class="card-title">Optimization Run: <code>{{ run.id }}</code></h2>
+      <p style="color: var(--text-muted); font-size: 0.88rem; margin-top: 0.25rem;">
+        Executed on {{ run.created_at[:19].replace('T', ' ') }} UTC
+      </p>
+    </div>
+    <div>
+      {% if run.status == 'COMPLETED' %}
+        <span class="badge badge-success" style="font-size: 0.9rem; padding: 0.4rem 0.8rem;">COMPLETED ({{ run.solutions|length }} Alternatives)</span>
+      {% elif run.status == 'INFEASIBLE' %}
+        <span class="badge badge-danger" style="font-size: 0.9rem; padding: 0.4rem 0.8rem;">INFEASIBLE</span>
+      {% elif run.status == 'INVALID_INPUT' %}
+        <span class="badge badge-warning" style="font-size: 0.9rem; padding: 0.4rem 0.8rem;">INVALID INPUT</span>
+      {% else %}
+        <span class="badge badge-secondary" style="font-size: 0.9rem; padding: 0.4rem 0.8rem;">{{ run.status }}</span>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="card-body">
+    <!-- Diagnostics & Warnings Panel -->
+    <div style="background: #f8fafc; border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 1.25rem; margin-bottom: 1.5rem;">
+      <h3 style="font-size: 1rem; font-weight: 600; margin-bottom: 0.5rem;">Run Diagnostics & Solver Notes:</h3>
+      {% if run.diagnostics.get('message') %}
+        <p style="color: var(--text-main); margin-bottom: 0.5rem;"><strong>{{ run.diagnostics.get('message') }}</strong></p>
+      {% endif %}
+      {% if run.diagnostics.get('reasons') %}
+        <ul style="color: var(--danger); margin-left: 1.5rem; margin-bottom: 0.5rem;">
+          {% for r in run.diagnostics.get('reasons') %}
+            <li>{{ r }}</li>
+          {% endfor %}
+        </ul>
+      {% endif %}
+      {% if run.diagnostics.get('errors') %}
+        <ul style="color: var(--danger); margin-left: 1.5rem; margin-bottom: 0.5rem;">
+          {% for err in run.diagnostics.get('errors') %}
+            <li>{{ err }}</li>
+          {% endfor %}
+        </ul>
+      {% endif %}
+      {% if run.diagnostics.get('warnings') %}
+        <div style="margin-top: 0.5rem;">
+          <strong style="color: var(--warning); font-size: 0.88rem;">Notices & Warnings:</strong>
+          <ul style="color: #b45309; margin-left: 1.5rem; font-size: 0.88rem;">
+            {% for w in run.diagnostics.get('warnings') %}
+              <li>{{ w }}</li>
+            {% endfor %}
+          </ul>
+        </div>
+      {% endif %}
+      {% if run.diagnostics.get('notes') %}
+        <p style="color: var(--text-muted); font-size: 0.88rem; margin-top: 0.4rem;">
+          {{ run.diagnostics.get('notes') }}
+        </p>
+      {% endif %}
+    </div>
+
+    <!-- Recommendations Teaser -->
+    {% if recommendations %}
+      <div style="background: var(--primary-light); border: 1px solid #bfdbfe; border-radius: var(--radius-md); padding: 1rem 1.25rem; margin-bottom: 1.5rem; display: flex; justify-content: space-between; align-items: center;">
+        <div>
+          <strong style="color: var(--primary); font-size: 1rem;">&#128161; Decision-Support Recommendations Available</strong>
+          <p style="color: #1e3a8a; font-size: 0.88rem; margin-top: 0.2rem;">
+            Inspect transparent policy recommendations (Student Preference vs Project Quality vs Egalitarian Fairness).
+          </p>
+        </div>
+        <a href="{{ url_for('visualization_web.view_recommendations', run_id=run.id) }}" class="btn btn-primary">
+          View Recommendations &rarr;
+        </a>
+      </div>
+    {% endif %}
+
+    <!-- Retained Alternative Solutions -->
+    <h3 style="font-size: 1.2rem; font-weight: 700; margin-bottom: 1rem;">Generated Feasible Solutions</h3>
+
+    {% if run.solutions %}
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1.25rem;">
+        {% for s in run.solutions %}
+          {% set eff = s.indicators.get('efficiency', {}) %}
+          {% set fair = s.indicators.get('fairness', {}) %}
+          {% set cap = s.indicators.get('capacity', {}) %}
+
+          <div class="card" style="margin-bottom: 0;">
+            <div class="card-header" style="background: #f8fafc;">
+              <div>
+                <h4 style="font-size: 1.05rem; font-weight: 700;">
+                  Alternative #{{ s.alternative_number }}
+                </h4>
+                <span class="badge badge-secondary">{{ s.strategy_name }}</span>
+              </div>
+              <a href="{{ url_for('visualization_web.view_solution', solution_id=s.id) }}" class="btn btn-sm btn-primary">
+                Explore Allocations &rarr;
+              </a>
+            </div>
+
+            <div class="card-body">
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 1rem;">
+                <div style="background: #ffffff; border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 0.6rem;">
+                  <div style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600;">AVG SKILL FIT</div>
+                  <div style="font-size: 1.3rem; font-weight: 700; color: var(--primary);">
+                    {{ (eff.get('mean_skill_fit', 0.0) * 100)|round(1) }}%
+                  </div>
+                </div>
+
+                <div style="background: #ffffff; border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 0.6rem;">
+                  <div style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600;">AVG PREF RANK</div>
+                  <div style="font-size: 1.3rem; font-weight: 700; color: var(--success);">
+                    #{{ fair.get('mean_rank', 'N/A') }}
+                  </div>
+                </div>
+
+                <div style="background: #ffffff; border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 0.6rem;">
+                  <div style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600;">WORST RANK</div>
+                  <div style="font-size: 1.2rem; font-weight: 700; color: var(--warning);">
+                    #{{ fair.get('worst_rank', 'N/A') }}
+                  </div>
+                </div>
+
+                <div style="background: #ffffff; border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 0.6rem;">
+                  <div style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600;">RANK GINI</div>
+                  <div style="font-size: 1.2rem; font-weight: 700; color: #475569;">
+                    {{ fair.get('rank_gini', 'N/A') }}
+                  </div>
+                </div>
+              </div>
+
+              <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.5rem;">
+                <strong>Preference Distribution:</strong>
+                {% for r_key, count in fair.get('rank_distribution', {}).items() %}
+                  <span class="badge badge-secondary">{{ r_key }}: {{ count }}</span>
+                {% endfor %}
+              </div>
+
+              {% if fair.get('unranked_count', 0) > 0 %}
+                <div style="font-size: 0.82rem; color: var(--danger); margin-top: 0.35rem;">
+                  &#9888; {{ fair.get('unranked_count') }} student(s) assigned outside stated preferences.
+                </div>
+              {% endif %}
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <p style="color: var(--text-muted); text-align: center; padding: 2rem 0;">
+        No feasible solutions were generated for this run. Review constraint diagnostics above.
+      </p>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

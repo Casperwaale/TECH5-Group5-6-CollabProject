@@ -1,0 +1,175 @@
+{% extends "base.html" %}
+
+{% block title %}Solution #{{ solution.alternative_number }} Details - TECH5{% endblock %}
+
+{% block content %}
+<div style="margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center;">
+  <a href="{{ url_for('visualization_web.view_run', run_id=solution.run_id) }}" class="btn btn-sm btn-secondary">
+    &larr; Back to Run Overview
+  </a>
+  <a href="{{ url_for('visualization_web.compare_solutions', sol1=solution.id) }}" class="btn btn-sm btn-primary">
+    Compare This Solution With Another &rarr;
+  </a>
+</div>
+
+{% set eff = solution.indicators.get('efficiency', {}) %}
+{% set fair = solution.indicators.get('fairness', {}) %}
+{% set cap = solution.indicators.get('capacity', {}) %}
+
+<!-- Solution KPI Grid -->
+<div class="kpi-grid">
+  <div class="kpi-card">
+    <span class="kpi-label">Average Skill Fit</span>
+    <span class="kpi-value" style="color: var(--primary);">
+      {{ (eff.get('mean_skill_fit', 0.0) * 100)|round(1) }}%
+    </span>
+    <span class="kpi-sub">{{ eff.get('unmet_soft_requirements_count', 0) }} unmet soft requirement(s)</span>
+  </div>
+
+  <div class="kpi-card">
+    <span class="kpi-label">Average Preference Rank</span>
+    <span class="kpi-value" style="color: var(--success);">
+      #{{ fair.get('mean_rank', 'N/A') }}
+    </span>
+    <span class="kpi-sub">Worst individual rank: #{{ fair.get('worst_rank', 'N/A') }}</span>
+  </div>
+
+  <div class="kpi-card">
+    <span class="kpi-label">Rank Disparity (Gini)</span>
+    <span class="kpi-value" style="color: #475569;">
+      {{ fair.get('rank_gini', 'N/A') }}
+    </span>
+    <span class="kpi-sub">Variance: {{ fair.get('rank_variance', 'N/A') }}</span>
+  </div>
+
+  <div class="kpi-card">
+    <span class="kpi-label">Outside Stated Preferences</span>
+    <span class="kpi-value {% if fair.get('unranked_count', 0) > 0 %}text-danger{% else %}text-success{% endif %}">
+      {{ fair.get('unranked_count', 0) }}
+    </span>
+    <span class="kpi-sub">{{ fair.get('unranked_pct', 0.0) }}% of cohort unranked</span>
+  </div>
+</div>
+
+<!-- Detailed Allocations Table -->
+<div class="card">
+  <div class="card-header">
+    <div>
+      <h2 class="card-title">Student-to-Project Allocations (Solution Alternative #{{ solution.alternative_number }})</h2>
+      <p style="color: var(--text-muted); font-size: 0.88rem; margin-top: 0.2rem;">
+        Strategy: <strong>{{ solution.strategy_name }}</strong> &bull; {{ solution.assignments|length }} students assigned
+      </p>
+    </div>
+  </div>
+
+  <div class="card-body">
+    <div class="table-responsive">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Student</th>
+            <th>Assigned Project</th>
+            <th>Preference Rank</th>
+            <th>Skill Fit Match</th>
+            <th>Status / Unmet Skills</th>
+            {% if can_edit %}<th>Interactive Rerun</th>{% endif %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for asg in solution.assignments %}
+            {% set stud = students.get(asg.student_id) %}
+            {% set proj = projects.get(asg.project_id) %}
+            <tr>
+              <td>
+                <strong>{{ stud.display_name if stud else asg.student_id }}</strong>
+                <div style="font-size: 0.8rem; color: var(--text-muted);">
+                  ID: <code>{{ asg.student_id }}</code>
+                </div>
+              </td>
+              <td>
+                <strong>{{ proj.title if proj else asg.project_id }}</strong>
+                <div style="font-size: 0.8rem; color: var(--text-muted);">
+                  Project ID: <code>{{ asg.project_id }}</code>
+                </div>
+              </td>
+              <td>
+                {% if asg.preference_rank == 1 %}
+                  <span class="badge badge-success" style="font-size: 0.85rem;">1st Choice</span>
+                {% elif asg.preference_rank == 2 %}
+                  <span class="badge badge-primary" style="font-size: 0.85rem;">2nd Choice</span>
+                {% elif asg.preference_rank is not none %}
+                  <span class="badge badge-secondary" style="font-size: 0.85rem;">#{{ asg.preference_rank }} Choice</span>
+                {% else %}
+                  <span class="badge badge-danger" style="font-size: 0.85rem;">Unranked / Fallback</span>
+                {% endif %}
+              </td>
+              <td style="width: 170px;">
+                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                  <div style="flex: 1; background: #e2e8f0; height: 8px; border-radius: 4px; overflow: hidden;">
+                    <div style="background: {% if asg.skill_fit_score >= 0.8 %}var(--success){% elif asg.skill_fit_score >= 0.5 %}#3b82f6{% else %}var(--warning){% endif %}; width: {{ (asg.skill_fit_score * 100)|round }}%; height: 100%;"></div>
+                  </div>
+                  <span style="font-weight: 600; font-size: 0.85rem;">{{ (asg.skill_fit_score * 100)|round }}%</span>
+                </div>
+              </td>
+              <td>
+                {% if asg.is_fixed %}
+                  <span class="badge badge-primary" title="Pre-allocated by fixed constraint">&#128274; FIXED LOCK</span>
+                {% endif %}
+                {% if asg.unmet_requirements %}
+                  {% for u in asg.unmet_requirements %}
+                    <span class="badge badge-warning" title="Required skill deficit">Missing: {{ u }}</span>
+                  {% endfor %}
+                {% elif not asg.is_fixed %}
+                  <span style="color: var(--success); font-size: 0.85rem;">&#10003; Full Fit</span>
+                {% endif %}
+              </td>
+              {% if can_edit %}
+                <td>
+                  {% if not asg.is_fixed %}
+                    <form action="{{ url_for('visualization_web.lock_and_rerun', solution_id=solution.id) }}" method="POST" onsubmit="return confirm('Lock student {{ asg.student_id }} to project {{ asg.project_id }} and run optimization again?');">
+                      <input type="hidden" name="student_id" value="{{ asg.student_id }}">
+                      <input type="hidden" name="project_id" value="{{ asg.project_id }}">
+                      <button type="submit" class="btn btn-sm btn-secondary" title="Lock this pair and trigger rerun">
+                        &#128274; Lock & Rerun
+                      </button>
+                    </form>
+                  {% else %}
+                    <small style="color: var(--text-muted);">Already locked</small>
+                  {% endif %}
+                </td>
+              {% endif %}
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Project Capacities Summary -->
+<div class="card">
+  <div class="card-header">
+    <h3 class="card-title">Project Capacity Utilization</h3>
+  </div>
+  <div class="card-body">
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem;">
+      {% for p_id, p_info in cap.get('projects', {}).items() %}
+        {% set p_obj = projects.get(p_id) %}
+        <div style="border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 0.85rem;">
+          <div style="display: flex; justify-content: space-between; font-weight: 600; font-size: 0.95rem;">
+            <span>{{ p_obj.title if p_obj else p_id }}</span>
+            <span>{{ p_info.assigned_count }} / {{ p_info.max_capacity }}</span>
+          </div>
+          <div style="background: #e2e8f0; height: 6px; border-radius: 3px; margin: 0.5rem 0; overflow: hidden;">
+            <div style="background: var(--primary); width: {{ p_info.utilization_pct }}%; height: 100%;"></div>
+          </div>
+          <div style="font-size: 0.8rem; color: var(--text-muted); display: flex; justify-content: space-between;">
+            <span>Min: {{ p_info.min_capacity }}</span>
+            <span>{{ p_info.utilization_pct }}% filled</span>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endblock %}

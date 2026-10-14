@@ -1,0 +1,188 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - TECH5 Decision Support{% endblock %}
+
+{% block content %}
+<div class="kpi-grid">
+  <div class="kpi-card">
+    <span class="kpi-label">Student Cohort</span>
+    <span class="kpi-value">{{ student_count }}</span>
+    <span class="kpi-sub"><a href="{{ url_for('visualization_web.list_students') }}">View & Edit Students
+        &rarr;</a></span>
+  </div>
+  <div class="kpi-card">
+    <span class="kpi-label">Active Projects</span>
+    <span class="kpi-value">{{ project_count }}</span>
+    <span class="kpi-sub"><a href="{{ url_for('visualization_web.list_projects') }}">View & Edit Projects
+        &rarr;</a></span>
+  </div>
+  <div class="kpi-card">
+    <span class="kpi-label">Total Max Capacity</span>
+    <span class="kpi-value">{{ total_capacity }}</span>
+    <span class="kpi-sub">{% if total_capacity >= student_count %}&#10003; Sufficient Capacity{% else %}&#9888; Capacity
+      Deficit{% endif %}</span>
+  </div>
+  <div class="kpi-card">
+    <span class="kpi-label">Fixed Locks</span>
+    <span class="kpi-value">{{ fixed_count }}</span>
+    <span class="kpi-sub"><a href="{{ url_for('visualization_web.list_fixed_assignments') }}">Manage Pre-allocations
+        &rarr;</a></span>
+  </div>
+</div>
+
+<div class="grid-2">
+  <!-- Optimization Run Trigger Panel -->
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title">&#9654; Run Assignment Optimization (Service A)</h2>
+    </div>
+    <div class="card-body">
+      <p style="color: var(--text-muted); margin-bottom: 1.25rem;">
+        Executes multi-objective mathematical matching on the current cohort, honoring all capacity and fixed assignment
+        hard constraints while producing distinct Pareto alternatives.
+      </p>
+
+      {% if can_optimize %}
+      <form action="{{ url_for('visualization_web.trigger_run') }}" method="POST">
+        <div class="form-group">
+          <label class="form-label" for="primary_strategy">Primary Objective Strategy:</label>
+          <select name="primary_strategy" id="primary_strategy" class="form-control">
+            <option value="PREFERENCE" selected>Student Preference Maximization (Minimize Rank Regret)</option>
+            <option value="SKILL_FIT">Project Skill Fit Maximization (Highest Quality Delivery)</option>
+            <option value="BALANCED">Balanced Multi-Objective Trade-Off (Egalitarian Fairness)</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="max_alternatives">Distinct Alternatives to Retain:</label>
+          <select name="max_alternatives" id="max_alternatives" class="form-control">
+            <option value="1">1 Solution</option>
+            <option value="2">2 Distinct Solutions</option>
+            <option value="3" selected>3 Distinct Solutions</option>
+            <option value="4">4 Distinct Solutions</option>
+          </select>
+        </div>
+
+        <button type="submit" class="btn btn-primary" style="width: 100%; padding: 0.75rem; font-size: 1rem;">
+          Launch Optimization Run &rarr;
+        </button>
+      </form>
+      {% else %}
+      <div class="alert alert-warning">
+        Current role (<strong>{{ current_role }}</strong>) does not have permission to launch new optimization runs.
+        Switch role to Administrator or Programme Coordinator in the top right.
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Quick Benchmark Loader Card -->
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title">&#128203; Quick Benchmark Scenarios</h2>
+      <a href="{{ url_for('visualization_web.scenarios_page') }}" class="btn btn-sm btn-secondary">All Scenarios
+        &rarr;</a>
+    </div>
+    <div class="card-body">
+      <p style="color: var(--text-muted); margin-bottom: 1rem;">
+        Load pre-packaged benchmark cohorts designed to demonstrate specific matching dilemmas and trade-offs:
+      </p>
+
+      <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+        <form action="{{ url_for('visualization_web.load_scenario', scenario_name='standard') }}" method="POST">
+          <button type="submit" class="btn btn-secondary" style="width: 100%; justify-content: flex-start;">
+            <strong>Standard Trade-Off Benchmark</strong> (10 students, 4 projects, 3 distinct Pareto alternatives)
+          </button>
+        </form>
+
+        <form action="{{ url_for('visualization_web.load_scenario', scenario_name='fixed') }}" method="POST">
+          <button type="submit" class="btn btn-secondary" style="width: 100%; justify-content: flex-start;">
+            <strong>Fixed Assignment Scenario</strong> (Pre-allocated student lock demonstrating constraint
+            preservation)
+          </button>
+        </form>
+
+        <form action="{{ url_for('visualization_web.load_scenario', scenario_name='infeasible') }}" method="POST">
+          <button type="submit" class="btn btn-secondary"
+            style="width: 100%; justify-content: flex-start; color: var(--danger);">
+            <strong>Capacity Deficit Scenario</strong> (Tests mathematical infeasibility detection)
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Recent Historical Optimization Runs -->
+<div class="card">
+  <div class="card-header">
+    <h2 class="card-title">Recent Optimization Runs</h2>
+  </div>
+  <div class="card-body">
+    {% if recent_runs %}
+    <div class="table-responsive">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Run ID</th>
+            <th>Created Timestamp</th>
+            <th>Status</th>
+            <th>Alternatives Generated</th>
+            <th>Primary Strategy</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in recent_runs %}
+          <tr>
+            <td><code>{{ r.id[:8] }}...</code></td>
+            <td>{{ r.created_at[:19].replace('T', ' ') }}</td>
+            <td>
+              {% if r.status == 'COMPLETED' %}
+              <span class="badge badge-success">COMPLETED</span>
+              {% elif r.status == 'INFEASIBLE' %}
+              <span class="badge badge-danger">INFEASIBLE</span>
+              {% elif r.status == 'INVALID_INPUT' %}
+              <span class="badge badge-warning">INVALID INPUT</span>
+              {% else %}
+              <span class="badge badge-secondary">{{ r.status }}</span>
+              {% endif %}
+            </td>
+            <td><strong>{{ r.solutions|length }}</strong> solution(s)</td>
+            <td>{{ r.configuration.get('primary_strategy', 'PREFERENCE') }}</td>
+            <td>
+              <a href="{{ url_for('visualization_web.view_run', run_id=r.id) }}" class="btn btn-sm btn-primary">
+                View Solutions &rarr;
+              </a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p style="color: var(--text-muted); text-align: center; padding: 2rem 0;">
+      No optimization runs recorded yet. Click <strong>Standard Trade-Off Benchmark</strong> above to populate data and
+      launch a run.
+    </p>
+    {% endif %}
+  </div>
+</div>
+
+<div class="card" style="margin-top: 1.5rem;">
+  <div class="card-header">
+    <h2 class="card-title" style="color: var(--danger);">&#128465; Delete Solutions</h2>
+  </div>
+  <div class="card-body" style="display: flex; justify-content: space-between; align-items: center;">
+    <p style="color: var(--text-muted); margin: 0;">
+      Wipes all solutions from the database.
+    </p>
+    <form action="{{ url_for('visualization_web.clear_solutions') }}" method="POST"
+      onsubmit="return confirm('Clear all solutions?');">
+      <button type="submit" class="btn btn-danger">
+        Clear All Solutions
+      </button>
+    </form>
+  </div>
+</div>
+{% endblock %}

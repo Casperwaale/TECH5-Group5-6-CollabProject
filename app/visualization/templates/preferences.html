@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+
+{% block title %}Preference Matrix - TECH5{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="card-header">
+    <div>
+      <h2 class="card-title">Student Preference Matrix</h2>
+      <p style="color: var(--text-muted); font-size: 0.88rem; margin-top: 0.25rem;">
+        Cross-tabulation of student ranked preferences across all semester projects (1 = 1st choice, 2 = 2nd choice, &ndash; = unranked).
+      </p>
+    </div>
+  </div>
+
+  <div class="card-body">
+    {% if students and projects %}
+      <div class="table-responsive">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Student</th>
+              {% for p in projects %}
+                <th style="text-align: center;">
+                  {{ p.id }}
+                  <div style="font-size: 0.75rem; font-weight: normal; color: var(--text-muted);">
+                    Cap: {{ p.max_capacity }}
+                  </div>
+                </th>
+              {% endfor %}
+            </tr>
+          </thead>
+          <tbody>
+            {% for s in students %}
+              <tr>
+                <td><strong>{{ s.display_name }}</strong> (<code>{{ s.id }}</code>)</td>
+                {% for p in projects %}
+                  {% set r = s.get_preference_rank(p.id) %}
+                  <td style="text-align: center;">
+                    {% if r == 1 %}
+                      <span class="badge badge-success" style="font-size: 0.85rem;">1st Choice</span>
+                    {% elif r == 2 %}
+                      <span class="badge badge-primary" style="font-size: 0.85rem;">2nd Choice</span>
+                    {% elif r is not none %}
+                      <span class="badge badge-secondary" style="font-size: 0.85rem;">Rank {{ r }}</span>
+                    {% else %}
+                      <span style="color: #cbd5e1;">&ndash;</span>
+                    {% endif %}
+                  </td>
+                {% endfor %}
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p style="color: var(--text-muted); text-align: center; padding: 2rem 0;">
+        Requires both students and projects loaded to display preference matrix.
+      </p>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

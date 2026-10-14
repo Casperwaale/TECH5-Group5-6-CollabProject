@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+
+{% block title %}Students Roster - TECH5{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="card-header">
+    <div>
+      <h2 class="card-title">Student Cohort Roster</h2>
+      <p style="color: var(--text-muted); font-size: 0.88rem; margin-top: 0.25rem;">
+        Manage student profiles, recorded skill proficiencies, and ranked project preference lists.
+      </p>
+    </div>
+    {% if can_edit %}
+      <a href="{{ url_for('visualization_web.new_student_form') }}" class="btn btn-primary">
+        + Add New Student
+      </a>
+    {% endif %}
+  </div>
+
+  <div class="card-body">
+    {% if students %}
+      <div class="table-responsive">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Display Name</th>
+              <th>Skill Proficiencies</th>
+              <th>Ranked Preferences</th>
+              {% if can_edit %}<th>Actions</th>{% endif %}
+            </tr>
+          </thead>
+          <tbody>
+            {% for s in students %}
+              <tr>
+                <td><strong>{{ s.id }}</strong></td>
+                <td>{{ s.display_name }}</td>
+                <td>
+                  {% if s.skills %}
+                    {% for sk_id, lvl in s.skills.items() %}
+                      <span class="badge badge-secondary" title="{{ sk_id }}">
+                        {{ sk_id }}: Lv.{{ lvl }}
+                      </span>
+                    {% endfor %}
+                  {% else %}
+                    <span style="color: var(--text-muted); font-style: italic;">None recorded</span>
+                  {% endif %}
+                </td>
+                <td>
+                  {% if s.preferences %}
+                    <div style="display: flex; gap: 0.35rem; flex-wrap: wrap;">
+                      {% for pref in s.preferences %}
+                        <span class="badge badge-primary">
+                          #{{ pref.rank }}: {{ pref.project_id }}
+                        </span>
+                      {% endfor %}
+                    </div>
+                  {% else %}
+                    <span style="color: var(--warning); font-style: italic;">No preferences ranked</span>
+                  {% endif %}
+                </td>
+                {% if can_edit %}
+                  <td>
+                    <div style="display: flex; gap: 0.5rem;">
+                      <a href="{{ url_for('visualization_web.edit_student_form', student_id=s.id) }}" class="btn btn-sm btn-secondary">
+                        Edit
+                      </a>
+                      <form action="{{ url_for('visualization_web.delete_student', student_id=s.id) }}" method="POST" onsubmit="return confirm('Delete student {{ s.id }}?');">
+                        <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+                      </form>
+                    </div>
+                  </td>
+                {% endif %}
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p style="color: var(--text-muted); text-align: center; padding: 2rem 0;">
+        No students currently in database. Click <strong>Add New Student</strong> or load a benchmark scenario from the Dashboard.
+      </p>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

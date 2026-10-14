@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}TECH5 Decision Support System{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+  <header>
+    <nav class="navbar">
+      <a href="{{ url_for('visualization_web.dashboard') }}" class="nav-brand">
+        TECH5 <span>Decision Support</span>
+      </a>
+
+      <ul class="nav-links">
+        <li><a href="{{ url_for('visualization_web.dashboard') }}">Dashboard</a></li>
+        <li><a href="{{ url_for('visualization_web.list_students') }}">Students</a></li>
+        <li><a href="{{ url_for('visualization_web.list_projects') }}">Projects</a></li>
+        <li><a href="{{ url_for('visualization_web.preferences_overview') }}">Preferences</a></li>
+        <li><a href="{{ url_for('visualization_web.list_fixed_assignments') }}">Fixed Locks</a></li>
+        <li><a href="{{ url_for('visualization_web.list_skills') }}">Skills</a></li>
+        <li><a href="{{ url_for('visualization_web.scenarios_page') }}">Scenarios</a></li>
+        <li><a href="{{ url_for('visualization_web.compare_solutions') }}">Compare</a></li>
+      </ul>
+
+      <div class="nav-role-switcher">
+        <form action="{{ url_for('visualization_web.set_role') }}" method="POST" style="display: flex; align-items: center; gap: 0.5rem;">
+          <label for="roleSelect">Role:</label>
+          <select id="roleSelect" name="role" class="role-select" onchange="this.form.submit()">
+            {% for r_key, r_desc in all_roles.items() %}
+              <option value="{{ r_key }}" {% if current_role == r_key %}selected{% endif %}>{{ r_desc }}</option>
+            {% endfor %}
+          </select>
+        </form>
+      </div>
+    </nav>
+  </header>
+
+  <main class="container">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div class="flash-messages">
+          {% for category, message in messages %}
+            <div class="alert alert-{{ category }}">
+              <span>{{ message }}</span>
+            </div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer class="footer">
+    <p>TECH5 Programming & Application Design &bull; NHH Norwegian School of Economics &bull; Integrated Assignment Support System</p>
+  </footer>
+</body>
+</html>
