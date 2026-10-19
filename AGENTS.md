@@ -10,7 +10,9 @@ The teams communicate only through the contract in `app/contract/contract.py` an
 ## Commands
 
 ```bash
-source .venv/bin/activate        # always use the project venv
+python -m venv .venv             # once, to create the project venv
+source .venv/bin/activate        # macOS/Linux: always use the project venv
+.venv\Scripts\Activate.ps1       # Windows (PowerShell): same, instead of the line above
 pip install -r requirements.txt
 pytest -q                        # full suite
 python run.py                    # app at http://127.0.0.1:5000
@@ -21,7 +23,7 @@ Test baseline on the starter code: **36 passed, 15 xfailed**. A change must not 
 
 ## Rules for every session and agent
 
-1. **Shared files need both teams' agreement.** Don't change `app/contract/contract.py`, `app/domain/models.py` or `app/persistence/schema.sql` without explicit approval from the user.
+1. **Shared files need both teams' agreement.** Don't change `app/contract/contract.py`, `app/domain/models.py` or `app/persistence/schema.sql` without approval from one member of each team (Team A and Team B).
 2. **Never edit, delete or re-mark a supplied test to make it pass.** Known exception: three tests assert the unimplemented stubs (`test_assignment_engine_initialization`, `test_assignment_engine_raises_not_implemented`, and the `NotImplementedError` checks in `tests/test_contract_and_engine.py`). Change them only once `docs/team_b_decisions.md` records approval.
 3. **Never relax a hard constraint to get an answer.** Infeasibility is a valid result: report it with diagnostics.
 4. **No unexplained crashes.** Every bad-input path ends in rejection, a warning, an explicitly allowed partial result, or a reported infeasibility.
