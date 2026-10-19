@@ -11,7 +11,8 @@ Status values: **OPEN** (not decided) · **PROPOSED** (team's choice, awaiting a
 ### D1. Assignment method — OPEN
 - **Proposal:** integer linear programming (ILP). One binary variable per eligible student–project pair. The objective is a weighted sum set by the strategy.
 - **Why:** it represents every hard constraint exactly, and it can *prove* when no further distinct alternative exists (edge cases 14 and 15).
-- **Library:** OPEN. Options: PuLP (bundles the CBC solver), Pyomo + highspy (familiar from the OR course), or `scipy.optimize.milp` (already installed).
+- **Library:** OPEN. Options: PuLP (bundles the CBC solver), Pyomo + highspy (familiar from the OR course), or `scipy.optimize.milp`. None of them is in `requirements.txt` yet, so the chosen one must be added.
+- **Casper (2026-10-16):** suggests Pyomo + highspy, since both of us used it in TECH4 and can build on that material.
 - **Approved by / date:**
 
 ### D2. Mandatory skills: per student or per project? — OPEN
