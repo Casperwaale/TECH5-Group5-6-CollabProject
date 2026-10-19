@@ -10,7 +10,7 @@ The file has three parts:
 
 Status values for decisions: **OPEN** (not decided) · **PROPOSED** (team's choice, awaiting approval) · **DECIDED**
 
-Decision IDs are kept stable. Gaps (D2–D6, D8, D9, D13) are items that turned out to be requirements, questions or withdrawn.
+Decision IDs are kept stable. Gaps (D2–D6, D8, D9, D11, D13) are items that turned out to be requirements, questions or withdrawn.
 
 ## Source check (do this before adding or changing any item)
 
@@ -18,7 +18,7 @@ An item may only be listed as a decision after **all** of these sources have bee
 
 1. The challenge brief (`TECH5_Collaborative_Project.pdf`, cited as "brief §n").
 2. The supplied tests in `tests/` (they must pass, brief §10.3).
-3. The contract and domain objects: `app/contract/contract.py`, `app/domain/models.py`.
+3. The contract, domain objects and database schema: `app/contract/contract.py`, `app/domain/models.py`, `app/persistence/schema.sql` (its `CHECK`, `UNIQUE` and key constraints define what valid data is).
 4. The starter code that consumes engine output: `app/engine/recommendations.py`, `app/engine/metrics.py` and `solvers.py` docstrings, `app/visualization/` routes and templates.
 5. The starter docs: `README.md`, `docs/analytical_note_template.md` (text outside `[brackets]` is given), `docs/analytical_formulation.md`, `docs/reproducible_demonstration.md`.
 
@@ -56,10 +56,15 @@ If a source fixes the item, it is a requirement: cite the source. If sources con
 - The brief says students rank at least three projects (§4), but edge case 1 requires a student with a single ranking to get a solution, and the UI accepts a student with one preference (`tests/test_visualization_component.py::test_create_student_preference_validation`).
 - So fewer than three rankings is a **warning**, not a rejection.
 
-### R7. Valid skill levels (was a D11 row)
-- Requirement levels are 1–5. (brief §4)
-- Student levels are 0–5, where 0 means the skill is not held. (`docs/analytical_note_template.md` §2.2, `Student.get_skill_level` returns 0 for a missing skill)
-- How to respond to a level outside these ranges is D11.
+### R7. Valid skill levels are 1–5; anything else is rejected (was D11)
+- Levels run from 1 to 5. (brief §4)
+- The database stores only levels ≥ 1 for student skills and requirements (`schema.sql`, `CHECK(level >= 1)`, `CHECK(minimum_level >= 1)`). A student without a skill has no row; `Student.get_skill_level` then returns 0.
+- A level above 5 is outside the scale the brief defines, and Team A's requirement form allows at most 5. Validation **rejects** any stored level outside 1–5.
+
+### R12. Preference lists must be valid; ties are rejected (was D11)
+- One rank per project and one project per rank for each student, ranks ≥ 1. (`schema.sql`: primary key `(student_id, project_id)`, `UNIQUE (student_id, rank)`, `CHECK(rank >= 1)`)
+- Validation **rejects** tied ranks or a repeated project within one student's list. `validation.py` currently only warns for both and must be changed.
+- Students sharing the same preferences ("tied preferences across students", brief §9) are valid and must solve (edge case 2).
 
 ### R8. The supplied test suite must pass (was D4)
 - "The supplied automated test suite must pass without unexpected failures or regressions." (brief §10.3)
@@ -112,16 +117,12 @@ The brief says mandatory requirements are hard constraints (§4) but not whom th
 ### D10. Strategies across alternatives — PROPOSED
 Constraint: `RunRequest` carries one `strategy_key`, which the UI calls the "primary strategy", so alternative 1 uses it.
 - **Proposal:** later alternatives use the remaining strategies in turn (for example PREFERENCE → SKILL_FIT → BALANCED), each with no-good cuts against all earlier solutions (R5). This is what `docs/reproducible_demonstration.md` §2.3 shows, and it makes `recommendations.py` meaningful because each policy has a candidate.
-- **Alternative:** all alternatives use the primary strategy, giving the next-best solutions under one objective.
+- **Alternative:** all alternatives use the primary strategy, giving the next-best solutions under one objective. These often differ by one or two students, so the trade-off the brief asks to show (§6) is weak.
+- Victor prefers the proposal (2026-10-19); Casper to confirm.
 - **Decision:**
 
-### D11. Validation responses — OPEN
-The brief asks us to decide, for each situation, whether to reject, warn, allow a partial result, or report infeasibility (§9). Rows fixed by sources are R1, R2, R6 and R7.
-
-| Situation | Proposal | Decision |
-|---|---|---|
-| Skill level outside the valid range (R7) | reject | |
-| Tied ranks within one student's list | warn (current behaviour) | |
+### D11. Validation responses — WITHDRAWN
+Every row turned out to be fixed by a source: capacity (R1), infeasible combinations (R2), incomplete preferences (R6), skill levels (R7), and tied or repeated preferences (R12).
 
 ### D12. Tie-breaking — PROPOSED
 Equal objective values are expected (brief §9). Add a tiny fixed tie-break (e.g. by student order) so runs are reproducible for the demo (brief §11, item 8), and document it in the analytical note.
