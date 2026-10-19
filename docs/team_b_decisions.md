@@ -4,27 +4,39 @@ The single record of modelling and policy rules for the assignment engine. Agent
 
 The file has three parts:
 
-1. **Requirements (R):** fixed by the challenge brief or the supplied tests. Not up to us; implement them as written.
-2. **Questions for the instructor:** the brief leaves them open, but they are not ours to settle.
+1. **Requirements (R):** fixed by the challenge brief, the supplied tests or the starter code. Not up to us; implement them as written.
+2. **Questions for the instructor:** the sources leave them open, but they are not ours to settle.
 3. **Decisions (D):** genuine choices for Team B. When one is made, change its status to **DECIDED**, write the decision and who approved it, and add a line to the log at the bottom.
 
 Status values for decisions: **OPEN** (not decided) · **PROPOSED** (team's choice, awaiting approval) · **DECIDED**
 
-Decision IDs are kept stable; gaps (D3, D5, D6, D9) are items that turned out to be requirements.
+Decision IDs are kept stable. Gaps (D2–D6, D8, D9, D13) are items that turned out to be requirements, questions or withdrawn.
+
+## Source check (do this before adding or changing any item)
+
+An item may only be listed as a decision after **all** of these sources have been checked and none of them fixes it:
+
+1. The challenge brief (`TECH5_Collaborative_Project.pdf`, cited as "brief §n").
+2. The supplied tests in `tests/` (they must pass, brief §10.3).
+3. The contract and domain objects: `app/contract/contract.py`, `app/domain/models.py`.
+4. The starter code that consumes engine output: `app/engine/recommendations.py`, `app/engine/metrics.py` and `solvers.py` docstrings, `app/visualization/` routes and templates.
+5. The starter docs: `README.md`, `docs/analytical_note_template.md` (text outside `[brackets]` is given), `docs/analytical_formulation.md`, `docs/reproducible_demonstration.md`.
+
+If a source fixes the item, it is a requirement: cite the source. If sources conflict, the order is **tests > brief > contract and starter code > docs**, because the tests must pass; record the conflict in the requirement.
 
 ---
 
-## 1. Requirements from the brief and tests
+## 1. Requirements
 
-### R1. One project per student, unassigned allowed only when capacity is short (was D3)
-- "A student should receive at most one project, or exactly one where total project capacity makes this possible." (brief §4)
-- Exact allocation when total maximum capacity ≥ number of students. Otherwise every student gets at most one project, and the run is an explicitly allowed partial result.
-- Unassigned students are not stored as `Assignment` rows (foreign key to `projects`); they are reported in diagnostics. How the UI shows them is D13.
-- Edge case 7 tests `validate_cohort` with exact allocation enforced and must keep rejecting.
+### R1. Every student gets exactly one project; too few seats is infeasible (was D3)
+- Too few seats in total, or too many minimum seats, is reported as **infeasible** with diagnostics. (`tests/test_validation.py::test_aggregate_capacity_deficit`, `tests/test_edge_cases.py` cases 7 and 8, `tests/test_contract_and_engine.py::test_contract_validate_inputs`)
+- `RunRequest` has no option for a partial allocation, so the engine never leaves a student unassigned.
+- Conflict noted: brief §4 says "at most one project, or exactly one where total project capacity makes this possible", which would allow unassigned students. The supplied tests require infeasibility instead, and they win (brief §10.3).
 
 ### R2. Hard constraints are never relaxed (was D5)
 - Hard constraints: capacity limits, mandatory skills, valid identifiers, one project per student, fixed assignments. (brief §5.1)
 - If they cannot all hold, for example a fixed assignment that blocks a mandatory skill, the result is **infeasible with diagnostics** naming the conflict. "Do not hide the problem or silently change the constraints." (brief §5.1)
+- This also covers "project has too few qualified students" and "student qualifies for no project": both are infeasible with diagnostics, whether validation or the solver detects them.
 
 ### R3. Fixed assignments are always preserved (was D6)
 - The application must "preserve administrative fixed assignments". (brief §2, §5.1)
@@ -32,80 +44,91 @@ Decision IDs are kept stable; gaps (D3, D5, D6, D9) are items that turned out to
 
 ### R4. Skill fit uses non-mandatory requirements (was D9)
 - "Mandatory requirements act as hard constraints, while non-mandatory requirements contribute to skill-fit assessment." (brief §4)
-- Score per student–project pair: mean over the project's non-mandatory requirements of `min(1, level / minimum_level)`. No such requirements gives 1.0; a student with no skills gives 0.0. (`tests/test_metrics.py`)
+- Score per student–project pair: mean over the project's non-mandatory requirements of `min(1, level / minimum_level)`. No such requirements gives 1.0; a student with no skills gives 0.0. (`tests/test_metrics.py::test_skill_fit_calculation`, edge cases 3 and 4)
 - `unmet_requirements` lists every requirement below the required level.
 
 ### R5. Distinct alternatives (was the definition part of D10)
-- Up to K distinct feasible solutions, default K = 3. Two solutions differ only when at least one student's project changes. (brief §6)
-- If fewer distinct solutions exist, report that honestly; never duplicate one. (brief §6, edge cases 14 and 15)
+- Up to K distinct feasible solutions, default K = 3. Two solutions differ only when at least one student's project changes. (brief §6, `tests/test_solvers.py::test_distinct_alternatives_generation`)
+- If fewer distinct solutions exist, return only those and set `run.diagnostics["distinct_alternatives"]` to the number found; never duplicate one. (brief §6, edge cases 14 and 15)
 - With ILP this is a no-good cut against every earlier solution. Do not require more than one student to move.
 
 ### R6. Incomplete preferences are allowed, with a warning (was a D11 row)
-- The brief says students rank at least three projects (§4), but edge case 1 requires a student with a single ranking to get a solution.
+- The brief says students rank at least three projects (§4), but edge case 1 requires a student with a single ranking to get a solution, and the UI accepts a student with one preference (`tests/test_visualization_component.py::test_create_student_preference_validation`).
 - So fewer than three rankings is a **warning**, not a rejection.
 
-### R7. Skill levels are 1–5 (was a D11 row)
-- "Project skill requirements use proficiency levels from 1 to 5." (brief §4)
-- A level outside 1–5 is invalid input and is **rejected**.
+### R7. Valid skill levels (was a D11 row)
+- Requirement levels are 1–5. (brief §4)
+- Student levels are 0–5, where 0 means the skill is not held. (`docs/analytical_note_template.md` §2.2, `Student.get_skill_level` returns 0 for a missing skill)
+- How to respond to a level outside these ranges is D11.
 
 ### R8. The supplied test suite must pass (was D4)
 - "The supplied automated test suite must pass without unexpected failures or regressions." (brief §10.3)
 - Three tests assert the unimplemented stubs: `test_assignment_engine_initialization`, `test_assignment_engine_raises_not_implemented`, and the `NotImplementedError` checks in `tests/test_contract_and_engine.py`. When the engine replaces the stubs, update each one to check the real behaviour instead (for example, three strategies instead of zero), and say so in the pull request. This entry is the approval AGENTS.md rule 2 refers to.
+
+### R9. Additional fairness indicator: Gini of ranks, plus rank variance (was D8)
+- The starter code fixes the choice: `calculate_gini` is a listed Team B task (`README.md`) and is tested (`tests/test_metrics.py::test_gini_calculation`); `recommendations.py` selects the balanced recommendation by `rank_gini` then `rank_variance`; the templates display both.
+- Our part is the justification in the analytical note (brief §5.3: "proposed and justified"): Gini measures inequality between students, which the mean rank, worst rank and unranked count do not.
+
+### R10. Run outcomes
+- A solved run has `status == "COMPLETED"` and at least one solution. (edge cases 1–4, 14, 15)
+- An infeasible run has `status == "INFEASIBLE"` and no solutions; it is returned, not raised. (edge case 13, brief §5.1)
+- Each solution records the `strategy_name` that produced it. (`models.Solution`, templates)
+
+### R11. Output keys are fixed
+- Indicator keys read by `recommendations.py` and the templates: listed under "Team B notes" in `AGENTS.md`, plus `fairness.rank_variance`.
+- `compare_two_solutions` returns at least `is_distinct`, `changed_students_count`, `delta_mean_skill_fit`, `delta_mean_rank` and `rank_worsened_count`. (`tests/test_metrics.py::test_solution_comparison`)
 
 ---
 
 ## 2. Questions for the instructor
 
 ### Q1. Approval of the assignment method (part of D1)
-The brief requires instructor approval before the method becomes the baseline (§7). Send the D1 proposal once Team B agrees on it.
+The brief requires instructor approval before the method becomes the baseline (§7). Send the D1 proposal.
 - **Approved by / date:**
 
 ### Q2. Mandatory skills: per student or per project? (was D2)
-The brief says mandatory requirements are hard constraints (§4) but not whom they apply to.
+The brief says mandatory requirements are hard constraints (§4) but not whom they apply to. The template allows either ("satisfied by at least one assigned student, or explain how your solver handles this", §2.4).
 - **Per student:** every student assigned to the project must meet the level. Ineligible pairs are simply excluded.
 - **Per project:** at least one assigned student must meet the level.
-- **Hints:** the brief says popular preferences "may leave another project without appropriate skills" (§4), and `docs/analytical_note_template.md` says "satisfied by at least one assigned student"; both lean per project.
+- **Team B proposal: per project.** It matches the brief's trade-off "may leave another project without appropriate skills" (§4), the template's wording, and the existing validation check (no student in the cohort has the skill). Victor agrees (2026-10-19); Casper to confirm.
 - **Answer:**
 
 ---
 
 ## 3. Team B decisions
 
-### D1. Assignment method and library — OPEN
-- **Proposal:** integer linear programming (ILP). One binary variable per eligible student–project pair. The objective is a weighted sum set by the strategy.
+### D1. Assignment method and library — library DECIDED, method awaiting Q1
+- **Method:** integer linear programming (ILP). One binary variable per student–project pair. The objective is a weighted sum set by the strategy.
 - **Why:** it represents every hard constraint exactly, and it can *prove* when no further distinct alternative exists (R5).
-- **Library:** OPEN. Options: PuLP (bundles the CBC solver), Pyomo + highspy (familiar from the OR course), or `scipy.optimize.milp`. None of them is in `requirements.txt` yet, so the chosen one must be added.
-- **Casper (2026-10-16):** suggests Pyomo + highspy, since both of us used it in TECH4 and can build on that material.
-- **Decision:**
+- **Library: Pyomo + highspy** (HiGHS solver). Casper proposed it (2026-10-16), Victor agreed (2026-10-19). We both used Pyomo with `appsi_highs` in TECH4. Both packages must be added to `requirements.txt`. The README's "e.g. PuLP/CBC" is an example, not a requirement.
 
 ### D7. Rank value for an unranked project — OPEN
-`Assignment.preference_rank` stays `None`. Metrics and the solver still need a number. Proposal: 1 + the longest preference list in the cohort.
+`Assignment.preference_rank` stays `None`. Metrics and the solver still need a number.
+- **(a) 1 + the longest preference list in the cohort.** Victor's preference (2026-10-19): unranked is one step worse than the worst real choice, so averages are not inflated.
+- **(b) |P| + 1.** `docs/analytical_note_template.md` §2.2 defines $r_{s,p} \in \{1,\dots,|P|\} \cup \{|P|+1\}$ outside the brackets, so the instructor may expect this.
+- Not fixed by any test. If we choose (a), the analytical note must say we depart from the template and why.
 - **Decision:**
 
-### D8. Additional fairness indicator — OPEN
-The brief requires one, "proposed and justified by the teams" (§5.3). Proposal: Gini coefficient of assigned ranks (`calculate_gini` already exists in the skeleton), plus rank variance.
-- **Decision:**
-
-### D10. Making alternatives meaningful — PROPOSED
-The definition of "distinct" is fixed (R5). The choice is how to make alternatives differ in useful ways: run a different strategy for each one (PREFERENCE → SKILL_FIT → BALANCED).
+### D10. Strategies across alternatives — PROPOSED
+Constraint: `RunRequest` carries one `strategy_key`, which the UI calls the "primary strategy", so alternative 1 uses it.
+- **Proposal:** later alternatives use the remaining strategies in turn (for example PREFERENCE → SKILL_FIT → BALANCED), each with no-good cuts against all earlier solutions (R5). This is what `docs/reproducible_demonstration.md` §2.3 shows, and it makes `recommendations.py` meaningful because each policy has a candidate.
+- **Alternative:** all alternatives use the primary strategy, giving the next-best solutions under one objective.
 - **Decision:**
 
 ### D11. Validation responses — OPEN
-The brief asks us to decide, for each situation, whether to reject, warn, allow a partial result, or report infeasibility (§9). Rows fixed by the brief or tests are R6 and R7.
+The brief asks us to decide, for each situation, whether to reject, warn, allow a partial result, or report infeasibility (§9). Rows fixed by sources are R1, R2, R6 and R7.
 
-| Situation | Decision |
-|---|---|
-| Project has fewer qualified students than its minimum (mandatory skill; depends on Q2) | |
-| Student qualifies for no project at all | |
-| Tied ranks within one student's list | currently a warning |
+| Situation | Proposal | Decision |
+|---|---|---|
+| Skill level outside the valid range (R7) | reject | |
+| Tied ranks within one student's list | warn (current behaviour) | |
 
 ### D12. Tie-breaking — PROPOSED
-Equal objective values are expected (brief §9). Add a tiny fixed tie-break (e.g. by student order) so runs are reproducible for the demo, and document it in the analytical note.
+Equal objective values are expected (brief §9). Add a tiny fixed tie-break (e.g. by student order) so runs are reproducible for the demo (brief §11, item 8), and document it in the analytical note.
 - **Decision:**
 
-### D13. Reporting unassigned students — OPEN (agree with Team A)
-R1 allows unassigned students when capacity is short. Decide how the engine reports them (diagnostics field and wording) and how the UI shows them.
-- **Decision:**
+### D13. Reporting unassigned students — WITHDRAWN
+Added on 2026-10-19 on the assumption that students could be left unassigned. R1 shows the tests require infeasibility instead, so there are no unassigned students to report.
 
 ---
 
@@ -113,4 +136,4 @@ R1 allows unassigned students when capacity is short. Decide how the engine repo
 
 | Date | Decision | By |
 |---|---|---|
-| | | |
+| 2026-10-19 | D1 library: Pyomo + highspy | Casper, Victor |
