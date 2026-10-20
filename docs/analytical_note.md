@@ -2,7 +2,7 @@
 ## Student Submission Template — TECH5 Collaborative Project
 
 **Team:** Group 5-6  
-**Authors (Team B - Assignment Engine):** Victor Goller, Casper Waale  
+**Authors (Team B - Assignment Engine):** Victor Goller, Casper Waale, Ole Kristian Skaar  
 **Authors (Team A - Visualization & Recommender):** Alex Solheim, Herman Kilde, Nils Lærum Harloff  
 **Course:** TECH5 Programming & Application Design, NHH Norwegian School of Economics  
 **Date:** [Submission Date]
@@ -38,35 +38,35 @@
 ### 2.1 Index Sets & Dimensions
 - $S = \{s_1, \dots, s_n\}$: students in the cohort, $\lvert S \rvert = n$.
 - $P = \{p_1, \dots, p_m\}$: projects, $\lvert P \rvert = m$.
-- $K$: catalogued skills.
+- $T$: catalogued skills, indexed by $t$. (The letter $K$ is reserved for the number of alternatives, as in the brief.)
 - $F \subseteq S \times P$: fixed assignments (administrative locks).
-- $K_p^{\text{soft}} \subseteq K$: non-mandatory skill requirements of project $p$.
-- $M_p \subseteq K$: mandatory skill requirements of project $p$.
-- $Q_{p,k} = \{ s \in S : \ell_{s,k} \ge q_{p,k} \}$: students qualified for mandatory requirement $k \in M_p$.
-- $P^{M} = \{ p \in P : M_p \neq \emptyset \}$: projects with at least one mandatory requirement.
-- $\Sigma = (\text{PREFERENCE}, \text{SKILL\_FIT}, \text{BALANCED})$: the strategies.
+- $T_p^{\text{soft}} \subseteq T$: non-mandatory skill requirements of project $p$.
+- $E_p \subseteq T$: mandatory ("essential") skill requirements of project $p$.
+- $Q_{p,t} = \{ s \in S : \alpha_{s,t} \ge \beta_{p,t} \}$: students qualified for mandatory requirement $t \in E_p$.
+- $P^{E} = \{ p \in P : E_p \neq \emptyset \}$: projects with at least one mandatory requirement.
+- $\Omega = (\text{PREFERENCE}, \text{SKILL\_FIT}, \text{BALANCED})$: the strategies, in order.
 
 All sets are built in sorted identifier order, so the same input always produces the same model (R16).
 
 ### 2.2 Model Parameters
 - $l_p \in \mathbb{Z}_{\ge 0}$, $u_p \in \mathbb{Z}_{\ge 1}$: minimum and maximum headcount of project $p$, $l_p \le u_p$.
-- $\ell_{s,k} \in \{0, 1, \dots, 5\}$: proficiency of student $s$ in skill $k$; $0$ means the skill is not held (R7).
-- $q_{p,k} \in \{1, \dots, 5\}$: minimum level that project $p$ requires in skill $k$ (R7).
-- $R = m + 1$: penalty rank for an unranked project (R14).
-- $r_{s,p}$: preference rank of student $s$ for project $p$ (R14):
+- $\alpha_{s,t} \in \{0, 1, \dots, 5\}$: proficiency of student $s$ in skill $t$; $0$ means the skill is not held (R7).
+- $\beta_{p,t} \in \{1, \dots, 5\}$: minimum level that project $p$ requires in skill $t$ (R7).
+- $K \in \mathbb{Z}_{\ge 1}$: number of distinct alternatives requested, default $K = 3$ (`max_alternatives`, R5). Alternatives are indexed $k = 1, \dots, K$ (`alternative_number`).
+- $r_{s,p}$: preference rank of student $s$ for project $p$; an unranked project gets the penalty rank $m + 1$ (R14):
 
 $$
 r_{s,p} =
 \begin{cases}
 \text{stated rank of } p \text{ by } s, & \text{if } s \text{ ranked } p,\\
-R = m + 1, & \text{otherwise.}
+m + 1, & \text{otherwise.}
 \end{cases}
 $$
 
-- $\rho_{s,p} \in [0, 1]$: normalised preference score, $1$ for a first choice and $0$ for an unranked project:
+- $\phi_{s,p} \in [0, 1]$: normalised preference score, $1$ for a first choice and $0$ for an unranked project:
 
 $$
-\rho_{s,p} = \frac{R - r_{s,p}}{R - 1}
+\phi_{s,p} = \frac{m + 1 - r_{s,p}}{m}
 $$
 
 - $\sigma_{s,p} \in [0, 1]$: skill fit of student $s$ on project $p$, over the non-mandatory requirements only (R4):
@@ -74,15 +74,17 @@ $$
 $$
 \sigma_{s,p} =
 \begin{cases}
-\dfrac{1}{\lvert K_p^{\text{soft}} \rvert} \displaystyle\sum_{k \in K_p^{\text{soft}}} \min\!\left(1, \frac{\ell_{s,k}}{q_{p,k}}\right), & K_p^{\text{soft}} \neq \emptyset,\\[2ex]
-1, & K_p^{\text{soft}} = \emptyset.
+\dfrac{1}{\lvert T_p^{\text{soft}} \rvert} \displaystyle\sum_{t \in T_p^{\text{soft}}} \min\!\left(1, \frac{\alpha_{s,t}}{\beta_{p,t}}\right), & T_p^{\text{soft}} \neq \emptyset,\\[2ex]
+1, & T_p^{\text{soft}} = \emptyset.
 \end{cases}
 $$
 
+$r_{s,p}$, $\phi_{s,p}$ and $\sigma_{s,p}$ are data, computed before solving, so every objective below is linear in the decision variables.
+
 ### 2.3 Decision Variables
 - $x_{s,p} \in \{0, 1\}$: $1$ if student $s$ is assigned to project $p$.
-- $y_p \in \{0, 1\}$ for $p \in P^{M}$: $1$ if project $p$ is used (has at least one student). Needed only so that a project with $l_p = 0$ and a mandatory requirement may stay empty (R13).
-- $z \in \mathbb{R}_{\ge 0}$: worst assigned rank, used only by the BALANCED strategy.
+- $y_p \in \{0, 1\}$ for $p \in P^{E}$: $1$ if project $p$ is used (has at least one student). Needed only so that a project with $l_p = 0$ and a mandatory requirement may stay empty (R13).
+- $\theta \in \mathbb{R}_{\ge 0}$: worst assigned rank, used only by the BALANCED strategy.
 
 ### 2.4 Hard Mathematical Constraints
 These hold for every strategy. They are never relaxed; if they cannot all hold, the run is reported as infeasible with diagnostics (R2, R10).
@@ -108,43 +110,43 @@ $$
 4. **Mandatory skills, per project** (R13). If a project is used, each mandatory requirement is met by at least one assigned student:
 
 $$
-\sum_{s \in Q_{p,k}} x_{s,p} \ge y_p \qquad \forall p \in P^{M},\ k \in M_p
+\sum_{s \in Q_{p,t}} x_{s,p} \ge y_p \qquad \forall p \in P^{E},\ t \in E_p
 $$
 
 $$
-\sum_{s \in S} x_{s,p} \le u_p \, y_p \qquad \forall p \in P^{M}
+\sum_{s \in S} x_{s,p} \le u_p \, y_p \qquad \forall p \in P^{E}
 $$
 
 The second line forces $y_p = 1$ whenever the project has a student. If $l_p \ge 1$, constraint 2 already makes the project non-empty, so $y_p = 1$ and the requirement must be met.
 
-5. **Distinct alternatives: no-good cuts** (R5). Let $A^{(j)} = \{ (s, p) : x^{(j)}_{s,p} = 1 \}$ be the $j$-th solution found. Before solving for alternative $k$, add for every earlier solution:
+5. **Distinct alternatives: no-good cuts** (R5). Let $\Gamma^{(j)} = \{ (s, p) : x^{(j)}_{s,p} = 1 \}$ be the pairs of the $j$-th alternative found. Before solving for alternative $k$ ($k = 2, \dots, K$), add for every earlier alternative:
 
 $$
-\sum_{(s, p) \in A^{(j)}} x_{s,p} \le n - 1 \qquad j = 1, \dots, k - 1
+\sum_{(s, p) \in \Gamma^{(j)}} x_{s,p} \le n - 1 \qquad j = 1, \dots, k - 1
 $$
 
-At least one student must then move. If the model becomes infeasible, no further distinct alternative exists; the run returns the solutions found so far and reports their number in `diagnostics["distinct_alternatives"]` (R5).
+Since $\lvert \Gamma^{(j)} \rvert = n$, at least one student must then move. If the model becomes infeasible, no further distinct alternative exists; the run returns the solutions found so far and reports their number in `diagnostics["distinct_alternatives"]` (R5).
 
 ### 2.5 Optimization Objectives & Strategies
 
-**Order of strategies (R15).** Alternative 1 uses the strategy the user selects. Each next alternative uses the next strategy in $\Sigma$, wrapping around, and adds the no-good cuts above. With PREFERENCE selected and $K = 3$: alternative 1 = PREFERENCE, 2 = SKILL_FIT, 3 = BALANCED.
+**Order of strategies (R15).** Alternative 1 uses the strategy the user selects. Each next alternative uses the next strategy in $\Omega$, wrapping around, and adds the no-good cuts above. With PREFERENCE selected and $K = 3$: alternative 1 = PREFERENCE, 2 = SKILL_FIT, 3 = BALANCED.
 
 **Ties (R16).** Each strategy has a secondary term with a small weight, so that among solutions equal on the main goal the one that is better on the other goal is chosen (`docs/testing_and_quality.md`, edge case 2). Any remaining exact tie is resolved by the fixed sorted model order and a single-threaded HiGHS run, so the same input gives the same result.
 
 - **Strategy 1: PREFERENCE (minimise total rank)** (proposal)
 
 $$
-\min \; Z_{\text{pref}} = \sum_{s \in S} \sum_{p \in P} r_{s,p} \, x_{s,p} \;-\; \delta \sum_{s \in S} \sum_{p \in P} \sigma_{s,p} \, x_{s,p},
-\qquad \delta = \frac{1}{n + 1}
+\min \; Z_{\text{pref}} = \sum_{s \in S} \sum_{p \in P} r_{s,p} \, x_{s,p} \;-\; \varepsilon_{\text{pref}} \sum_{s \in S} \sum_{p \in P} \sigma_{s,p} \, x_{s,p},
+\qquad \varepsilon_{\text{pref}} = \frac{1}{n + 1}
 $$
 
-The rank sum is an integer, and the skill term is at most $n \delta < 1$, so it can only break ties: it never makes the rank sum worse. Minimising the rank sum equals minimising the mean rank $\bar{r}$ reported by the indicators.
+The rank sum is an integer, and the skill term is at most $n \, \varepsilon_{\text{pref}} < 1$, so it can only break ties: it never makes the rank sum worse. Minimising the rank sum equals minimising the mean rank $\bar{r}$ reported by the indicators.
 
 - **Strategy 2: SKILL_FIT (maximise total skill fit)** (proposal)
 
 $$
-\max \; Z_{\text{skill}} = \sum_{s \in S} \sum_{p \in P} \sigma_{s,p} \, x_{s,p} \;+\; \varepsilon \sum_{s \in S} \sum_{p \in P} \rho_{s,p} \, x_{s,p},
-\qquad \varepsilon = 10^{-3} / n
+\max \; Z_{\text{skill}} = \sum_{s \in S} \sum_{p \in P} \sigma_{s,p} \, x_{s,p} \;+\; \varepsilon_{\text{skill}} \sum_{s \in S} \sum_{p \in P} \phi_{s,p} \, x_{s,p},
+\qquad \varepsilon_{\text{skill}} = 10^{-3} / n
 $$
 
 The preference term is at most $10^{-3}$, so it breaks ties between solutions with (practically) equal skill fit. Unlike Strategy 1 this is not an exact guarantee, because skill-fit totals are not integers; we state this as a limitation.
@@ -154,19 +156,48 @@ The preference term is at most $10^{-3}$, so it breaks ties between solutions wi
   *Stage 1 (egalitarian):* minimise the worst assigned rank
 
 $$
-z^{*} = \min \; z \quad \text{s.t.} \quad z \ge \sum_{p \in P} r_{s,p} \, x_{s,p} \quad \forall s \in S, \quad \text{and constraints 1–5}
+\theta^{*} = \min \; \theta \quad \text{s.t.} \quad \theta \ge \sum_{p \in P} r_{s,p} \, x_{s,p} \quad \forall s \in S, \quad \text{and constraints 1–5}
 $$
 
   *Stage 2 (balance):* among solutions with that worst rank, maximise an equal mix of preference and skill fit
 
 $$
-\max \; Z_{\text{bal}} = \sum_{s \in S} \sum_{p \in P} \bigl( w \, \rho_{s,p} + (1 - w) \, \sigma_{s,p} \bigr) x_{s,p}
-\quad \text{s.t.} \quad \sum_{p \in P} r_{s,p} \, x_{s,p} \le z^{*} \;\; \forall s \in S, \quad \text{constraints 1–5}, \quad w = 0.5
+\max \; Z_{\text{bal}} = \sum_{s \in S} \sum_{p \in P} \bigl( \lambda \, \phi_{s,p} + (1 - \lambda) \, \sigma_{s,p} \bigr) x_{s,p}
+\quad \text{s.t.} \quad \sum_{p \in P} r_{s,p} \, x_{s,p} \le \theta^{*} \;\; \forall s \in S, \quad \text{constraints 1–5}, \quad \lambda = 0.5
 $$
 
-Both terms lie in $[0, 1]$ per student, so $w = 0.5$ weighs them equally. Stage 1 matches the strategy's label in the UI ("Egalitarian Fairness"): nobody gets a worse rank than necessary.
+Both terms lie in $[0, 1]$ per student, so $\lambda = 0.5$ weighs them equally. Stage 1 matches the strategy's label in the UI ("Egalitarian Fairness"): nobody gets a worse rank than necessary.
 
-**Open for Team B review:** the form of each objective, $w = 0.5$, and whether BALANCED should use the two-stage form or a single weighted objective.
+**Open for Team B review:** the form of each objective, $\lambda = 0.5$, and whether BALANCED should use the two-stage form or a single weighted objective.
+
+### 2.6 Notation Summary
+Each symbol has exactly one meaning in this note.
+
+| Symbol | Meaning | In the code |
+|---|---|---|
+| $S$, $s$, $n$ | students, a student, number of students | `students` |
+| $P$, $p$, $m$ | projects, a project, number of projects | `projects` |
+| $T$, $t$ | skills, a skill | `Skill` |
+| $T_p^{\text{soft}}$, $E_p$ | non-mandatory / mandatory requirements of $p$ | `requirements`, `is_mandatory` |
+| $Q_{p,t}$ | students qualified for mandatory skill $t$ on $p$ | — |
+| $P^{E}$ | projects with a mandatory requirement | — |
+| $F$ | fixed assignments | `fixed_assignments` |
+| $\Omega$ | ordered list of strategies | `strategies` |
+| $K$, $k$, $j$ | number of alternatives, an alternative, an earlier alternative | `max_alternatives`, `alternative_number` |
+| $\Gamma^{(j)}$ | student–project pairs of alternative $j$ | `excluded_solutions` |
+| $l_p$, $u_p$ | minimum / maximum headcount | `min_capacity`, `max_capacity` |
+| $\alpha_{s,t}$ | proficiency of $s$ in $t$ | `get_skill_level` |
+| $\beta_{p,t}$ | required level of $t$ on $p$ | `minimum_level` |
+| $r_{s,p}$ | preference rank ($m + 1$ if unranked) | — |
+| $\phi_{s,p}$ | normalised preference score | — |
+| $\sigma_{s,p}$ | skill fit | `calculate_assignment_skill_fit` |
+| $x_{s,p}$, $y_p$, $\theta$ | assignment, project used, worst rank | — |
+| $Z_{\text{pref}}$, $Z_{\text{skill}}$, $Z_{\text{bal}}$ | objective functions | — |
+| $\varepsilon_{\text{pref}}$, $\varepsilon_{\text{skill}}$, $\lambda$ | tie-break weights, balance weight | — |
+| $\bar{\sigma}$, $\bar{r}$, $r_{\max}$, $c_h$, $c_{\text{unr}}$, $G$, $\text{Util}_p$ | indicators (§3) | `indicators` |
+| $\Delta$ | difference between two solutions (§4) | `delta_*` |
+
+Tags R1–R17 are references to `docs/team_b_decisions.md`, not symbols.
 
 ---
 
@@ -189,13 +220,14 @@ Define the mathematical formulation for all evaluation metrics implemented in `a
 ### 3.3 Fairness Indicators
 *Section 6.3 of the specification mandates: rank distribution, unranked count, worst assigned rank, and ONE proposed and justified fairness indicator.*
 
-1. **Rank Distribution:** Histogram vector $[c_1, c_2, \dots, c_{|P|}, c_{\text{unranked}}]$ where $c_k$ is the number of students assigned to their $k$-th choice.
-2. **Unranked Allocation Count ($U$):** Count of students allocated outside their submitted preference list.
+1. **Rank Distribution:** Histogram vector $[c_1, c_2, \dots, c_m, c_{\text{unr}}]$ where $c_h$ is the number of students assigned to their $h$-th choice.
+2. **Unranked Allocation Count ($c_{\text{unr}}$):** Count of students allocated outside their submitted preference list.
 3. **Worst Assigned Rank ($r_{\max}$):**
    $$r_{\max} = \max_{(s,p) : x_{s,p}=1} r_{s,p}$$
 4. **Team's Proposed Fairness Indicator (e.g., Gini Coefficient or Rank Variance):**
    *Provide the mathematical formula, justification, and interpretation:*
-   $$G = \frac{\sum_{i=1}^n \sum_{j=1}^n |r_i - r_j|}{2 n \sum_{i=1}^n r_i}$$
+   With $r_s = \sum_{p \in P} r_{s,p} \, x_{s,p}$ the rank assigned to student $s$:
+   $$G = \frac{\sum_{s \in S} \sum_{s' \in S} |r_s - r_{s'}|}{2 n \sum_{s \in S} r_s}$$
    *[Explain why this metric captures inequality among student outcomes]*
 
 ### 3.4 Capacity Utilization Metrics
