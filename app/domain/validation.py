@@ -118,6 +118,23 @@ def validate_cohort(
     defined_skill_ids = {s.id for s in skills} if skills else None
 
     for student in students:
+        if 0 < len(student.preferences) < 3 and len(projects) >= 3:
+            result.warnings.append(
+                f"Student '{student.id}' ranked fewer than 3 projects "
+                f"({len(student.preferences)} ranked)."
+            )
+
+        for skill_id, level in student.skills.items():
+            if (
+                not isinstance(level, int)
+                or isinstance(level, bool)
+                or not 1 <= level <= 5
+            ):
+                result.errors.append(
+                    f"Student '{student.id}' has invalid skill level {level!r} "
+                    f"for skill '{skill_id}'; expected an integer from 1 to 5."
+                )
+
         if not student.preferences:
             result.warnings.append(
                 f"Student '{student.display_name}' ({student.id}) has "
@@ -140,7 +157,7 @@ def validate_cohort(
             seen_preferred_projects.add(pref.project_id)
 
             if pref.rank in seen_ranks:
-                result.warnings.append(
+                result.errors.append(
                     f"Student '{student.id}' has duplicate rank {pref.rank}."
                 )
             seen_ranks.add(pref.rank)
