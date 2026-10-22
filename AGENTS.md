@@ -13,6 +13,7 @@ The teams communicate only through the contract in `app/contract/contract.py` an
 python -m venv .venv             # once, to create the project venv
 source .venv/bin/activate        # macOS/Linux: always use the project venv
 .venv\Scripts\Activate.ps1       # Windows (PowerShell): same, instead of the line above
+.venv\Scripts\activate           # Windows (Command Prompt or Anaconda Prompt): same, instead of the line above
 pip install -r requirements.txt
 pytest -q                        # full suite
 python run.py                    # app at http://127.0.0.1:5000
