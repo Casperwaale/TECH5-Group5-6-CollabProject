@@ -20,6 +20,97 @@ from app.engine import metrics
 from app.persistence import repositories
 
 
+def prepare_data(
+    students: list[models.Student],
+    projects: list[models.Project],
+    fixed_assignments: list[models.FixedAssignment] | None = None,
+) -> dict[str, Any]:
+    """Builds the sets and parameters of the ILP model as plain Python data.
+
+    Follows docs/model/ilp_formulation.tex sections 1 and 2. Every quantity
+    that is non-linear in the inputs (ranks, scores, skill fit) is computed
+    here, so the model itself stays linear.
+
+    Args:
+        students: Students in the cohort.
+        projects: Available semester projects.
+        fixed_assignments: Pre-assigned student-project pairs that must hold.
+
+    Returns:
+        Dictionary with the index lists and parameter dicts keyed by tuples.
+    """
+    # --- Sets ---
+    # Sorted identifiers, so identical input gives an identical model (R16)
+    student_ids = sorted([student.id for student in students])    # S
+    project_ids = sorted([project.id for project in projects])    # P
+    student_by_id = {student.id: student for student in students}    # look up a student by id
+    project_by_id = {project.id: project for project in projects}    # look up a project by id
+    n = len(student_ids)    # |S|, number of students
+    m = len(project_ids)    # |P|, number of projects
+
+    # F: fixed (locked) student-project pairs (R3)
+    fixed_pairs = []
+    if fixed_assignments is not None:
+        fixed_pairs = [(fixed.student_id, fixed.project_id) for fixed in fixed_assignments]
+
+    # E_p: mandatory skills of each project; only projects that have one are stored
+    # Q_{p,t}: students whose level meets the required level of mandatory skill t on project p (R13)
+    mandatory_skills = {}
+    qualified = {}
+    for p in project_ids:
+        for req in project_by_id[p].requirements:
+            if req.is_mandatory:
+                if p not in mandatory_skills:
+                    mandatory_skills[p] = []
+                mandatory_skills[p].append(req.skill_id)
+                qualified[p, req.skill_id] = []
+                for s in student_ids:
+                    if student_by_id[s].get_skill_level(req.skill_id) >= req.minimum_level:
+                        qualified[p, req.skill_id].append(s)
+    for p in mandatory_skills:
+        mandatory_skills[p] = sorted(mandatory_skills[p])
+    mandatory_projects = sorted(mandatory_skills.keys())    # P^E, projects with a mandatory requirement
+
+    # --- Parameters ---
+    min_capacity = {p: project_by_id[p].min_capacity for p in project_ids}    # l_p
+    max_capacity = {p: project_by_id[p].max_capacity for p in project_ids}    # u_p
+
+    # r_{s,p}: stated rank, or penalty rank m + 1 for an unranked project (eq. 1, R14)
+    rank = {
+        (s, p): student_by_id[s].get_preference_rank(p)
+        if student_by_id[s].get_preference_rank(p) is not None else m + 1
+        for s in student_ids for p in project_ids
+    }
+
+    # phi_{s,p}: preference score, 1 for a first choice, 0 for an unranked project (eq. 2)
+    preference_score = {
+        (s, p): (m + 1 - rank[s, p]) / m
+        for s in student_ids for p in project_ids
+    }
+
+    # sigma_{s,p}: skill fit over non-mandatory requirements (eq. 3, R4); same function as the metrics
+    skill_fit = {
+        (s, p): metrics.calculate_assignment_skill_fit(student_by_id[s], project_by_id[p])[0]
+        for s in student_ids for p in project_ids
+    }
+
+    return {
+        "student_ids": student_ids,
+        "project_ids": project_ids,
+        "n": n,
+        "m": m,
+        "fixed_pairs": fixed_pairs,
+        "mandatory_skills": mandatory_skills,
+        "mandatory_projects": mandatory_projects,
+        "qualified": qualified,
+        "min_capacity": min_capacity,
+        "max_capacity": max_capacity,
+        "rank": rank,
+        "preference_score": preference_score,
+        "skill_fit": skill_fit,
+    }
+
+
 class AssignmentStrategy(abc.ABC):
     """Abstract Base Class for student-to-project allocation strategies.
 
