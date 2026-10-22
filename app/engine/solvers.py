@@ -417,6 +417,121 @@ class SkillFitOrientedSolver(AssignmentStrategy):
         return data["skill_fit"][s, p] + epsilon_skill * data["preference_score"][s, p]
 
 
+class BalancedTradeoffSolver(AssignmentStrategy):
+    """Strategy 3: protect the worst-off student first, then balance.
+
+    Solved in two stages, so no weight between fairness and efficiency has
+    to be tuned. Stage 1 finds the smallest possible worst rank theta*.
+    Stage 2 keeps every student at or below theta* and maximises an equal
+    mix of preference score and skill fit.
+    """
+
+    sense = pyo.maximize    # Direction of the stage 2 objective
+
+    def __init__(self) -> None:
+        """Initializes the balanced strategy."""
+        super().__init__(
+            name="BALANCED",
+            description="Minimise the worst rank, then balance preference and skill fit.",
+        )
+
+    def calculate_cost_or_utility(self, data: dict[str, Any], s: str, p: str) -> float:
+        """Returns lambda * phi[s,p] + (1 - lambda) * sigma[s,p] (Z_bal, stage 2).
+
+        Args:
+            data: Sets and parameters from prepare_data.
+            s: Student identifier.
+            p: Project identifier.
+
+        Returns:
+            The coefficient of x[s,p] in Z_bal.
+        """
+        # phi and sigma both lie in [0, 1], so lambda = 0.5 weighs them equally
+        balance_weight = 0.5    # lambda
+        return balance_weight * data["preference_score"][s, p] + (1 - balance_weight) * data["skill_fit"][s, p]
+
+    def solve(
+        self,
+        students: list[models.Student],
+        projects: list[models.Project],
+        fixed_assignments: list[models.FixedAssignment] | None = None,
+        excluded_solutions: list[list[tuple[str, str]]] | None = None,
+    ) -> tuple[str, list[models.Assignment], float | None, dict[str, Any]]:
+        """Solves stage 1 (min-max rank), then stage 2 (balance) on a rebuilt model.
+
+        Args:
+            students: List of students in the cohort.
+            projects: List of available semester projects.
+            fixed_assignments: Pre-assigned student-project pairs that must hold.
+            excluded_solutions: Previous solution allocations to cut out.
+
+        Returns:
+            A tuple of (solver_status, assignments, objective_value, diagnostics).
+            On any status other than "OPTIMAL" the assignments are empty and
+            the objective value is None.
+        """
+        data = prepare_data(students, projects, fixed_assignments)
+        student_ids = data["student_ids"]
+        project_ids = data["project_ids"]
+
+        # --- Stage 1: smallest possible worst rank ---
+        model = build_model(data, excluded_solutions)
+
+        # theta = worst assigned rank (eq. 6)
+        model.theta = pyo.Var(domain=pyo.NonNegativeReals)
+
+        # Constraint: theta is at least every student's assigned rank
+        model.worst_rank_constraint = pyo.ConstraintList()
+        for s in student_ids:
+            model.worst_rank_constraint.add(
+                model.theta >= sum(data["rank"][s, p] * model.x[s, p] for p in project_ids)
+            )
+
+        # Objective: minimise the worst rank
+        model.worst_rank = pyo.Objective(expr = model.theta, sense = pyo.minimize)
+
+        status = solve_model(model)
+        if status != "OPTIMAL":
+            diagnostics = {
+                "solver_status": status,
+                "variables_count": model.nvariables(),
+                "constraints_count": model.nconstraints(),
+            }
+            return status, [], None, diagnostics
+        # Ranks are integers, so round away solver tolerance before using theta* as a bound
+        theta_star = round(pyo.value(model.theta))
+
+        # --- Stage 2: best balance among the solutions with worst rank theta* ---
+        model = build_model(data, excluded_solutions)
+
+        # Constraint: no student receives a rank worse than theta*
+        model.rank_cap_constraint = pyo.ConstraintList()
+        for s in student_ids:
+            model.rank_cap_constraint.add(
+                sum(data["rank"][s, p] * model.x[s, p] for p in project_ids) <= theta_star
+            )
+
+        # Objective: maximise lambda * phi + (1 - lambda) * sigma over the assigned pairs
+        model.objective = pyo.Objective(
+            expr = sum(
+                self.calculate_cost_or_utility(data, s, p) * model.x[s, p]
+                for s in student_ids for p in project_ids
+            ),
+            sense = self.sense
+        )
+
+        status = solve_model(model)
+        diagnostics = {
+            "solver_status": status,
+            "variables_count": model.nvariables(),
+            "constraints_count": model.nconstraints(),
+            "worst_rank_bound": theta_star,
+        }
+        if status != "OPTIMAL":
+            return status, [], None, diagnostics
+        return status, read_assignments(model, data), pyo.value(model.objective), diagnostics
+
+
 class AssignmentEngine(contract.AssignmentEngineContract):
     """Main Assignment Engine orchestrating validation, execution, and persistence.
 
