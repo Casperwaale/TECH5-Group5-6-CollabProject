@@ -98,3 +98,65 @@ def test_aggregate_capacity_deficit() -> None:
     res = validation.validate_cohort(students=students, projects=projects)
     assert res.is_feasible is False
     assert any("Insufficient overall capacity" in err for err in res.errors)
+
+
+def test_duplicate_preference_rank_is_invalid() -> None:
+    """A student cannot give two different projects the same rank."""
+    student = models.Student(
+        id="S01", display_name="Student 1",
+        preferences=[
+            models.Preference(student_id="S01", project_id="P1", rank=1),
+            models.Preference(student_id="S01", project_id="P2", rank=1),
+        ],
+    )
+    projects = [
+        models.Project(id="P1", title="Project 1"),
+        models.Project(id="P2", title="Project 2"),
+    ]
+    result = validation.validate_cohort([student], projects)
+    assert not result.is_valid
+    assert any("duplicate rank" in error for error in result.errors)
+
+
+def test_invalid_student_skill_levels_are_rejected() -> None:
+    """Reported proficiency must be an integer between one and five."""
+    projects = [models.Project(id="P1", title="Project 1")]
+    for bad_level in (0, 6, -1, 2.5, True):
+        student = models.Student(
+            id="S01", display_name="Student 1", skills={"python": bad_level}
+        )
+        result = validation.validate_cohort([student], projects)
+        assert not result.is_valid
+        assert any("invalid skill level" in error for error in result.errors)
+
+
+def test_valid_student_skill_levels_are_accepted() -> None:
+    projects = [models.Project(id="P1", title="Project 1")]
+    for good_level in (1, 2, 3, 4, 5):
+        student = models.Student(
+            id="S01", display_name="Student 1", skills={"python": good_level}
+        )
+        result = validation.validate_cohort([student], projects)
+        assert result.is_valid
+
+
+def test_fewer_than_three_preferences_warns_without_rejecting() -> None:
+    projects = [models.Project(id=f"P{i}", title=f"Project {i}") for i in range(1, 4)]
+    student = models.Student(
+        id="S01", display_name="Student 1",
+        preferences=[models.Preference(student_id="S01", project_id="P1", rank=1)],
+    )
+    result = validation.validate_cohort([student], projects)
+    assert result.is_valid
+    assert any("fewer than 3 projects" in warning for warning in result.warnings)
+
+
+def test_three_preferences_does_not_trigger_short_ranking_warning() -> None:
+    projects = [models.Project(id=f"P{i}", title=f"Project {i}") for i in range(1, 4)]
+    student = models.Student(
+        id="S01", display_name="Student 1",
+        preferences=[models.Preference(student_id="S01", project_id=f"P{i}", rank=i)
+                     for i in range(1, 4)],
+    )
+    result = validation.validate_cohort([student], projects)
+    assert not any("fewer than 3 projects" in warning for warning in result.warnings)
