@@ -15,11 +15,14 @@ def test_assignment_strategy_abc() -> None:
 
 
 def test_assignment_engine_initialization() -> None:
-    """Verifies that AssignmentEngine initializes cleanly with empty strategies."""
+    """Verifies that AssignmentEngine registers the three strategies the UI sends."""
     engine = solvers.AssignmentEngine()
     assert isinstance(engine, contract.AssignmentEngineContract)
     assert isinstance(engine.strategies, dict)
-    assert len(engine.strategies) == 0
+    assert list(engine.strategies) == ["PREFERENCE", "SKILL_FIT", "BALANCED"]
+    for key, strategy in engine.strategies.items():
+        assert isinstance(strategy, solvers.AssignmentStrategy)
+        assert strategy.name == key
 
 
 def test_assignment_engine_raises_not_implemented() -> None:
