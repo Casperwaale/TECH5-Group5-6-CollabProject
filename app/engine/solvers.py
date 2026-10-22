@@ -21,6 +21,11 @@ from app.domain import validation
 from app.engine import metrics
 from app.persistence import repositories
 
+# Set up solver
+solver_name = 'appsi_highs'
+SOLVER = pyo.SolverFactory(solver_name)
+SOLVER.options['threads'] = 1    # Extension: single thread, so ties are broken the same way every run (R16)
+
 
 def prepare_data(
     students: list[models.Student],
@@ -194,6 +199,38 @@ def build_model(
             )
 
     return model
+
+
+def solve_model(model: pyo.ConcreteModel) -> str:
+    """Solves the model with HiGHS and reports the outcome instead of raising.
+
+    A bare SOLVER.solve(model) raises RuntimeError on an infeasible model.
+    Infeasibility is a valid result here (R2, R10), so it is returned as a
+    status and the caller decides what to report.
+
+    Args:
+        model: A built model with an objective.
+
+    Returns:
+        "OPTIMAL" with the solution loaded into the model, "INFEASIBLE",
+        "SOLVER_UNAVAILABLE", or the solver's own termination condition.
+    """
+    if not SOLVER.available():
+        return "SOLVER_UNAVAILABLE"
+
+    # Extension: load_solutions=False + termination check, so infeasibility is reported instead of raising
+    results = SOLVER.solve(model, load_solutions=False)
+    condition = results.solver.termination_condition
+
+    if condition == pyo.TerminationCondition.optimal:
+        model.solutions.load_from(results)
+        return "OPTIMAL"
+    # Every objective is bounded (binary x), so the model is never unbounded: both conditions mean infeasible
+    if condition == pyo.TerminationCondition.infeasible:
+        return "INFEASIBLE"
+    if condition == pyo.TerminationCondition.infeasibleOrUnbounded:
+        return "INFEASIBLE"
+    return str(condition).upper()
 
 
 class AssignmentStrategy(abc.ABC):
