@@ -150,7 +150,7 @@ def validate_cohort(
                     f"'{pref.project_id}'."
                 )
             if pref.project_id in seen_preferred_projects:
-                result.warnings.append(
+                result.errors.append(
                     f"Student '{student.id}' has multiple preferences for "
                     f"project '{pref.project_id}'."
                 )
