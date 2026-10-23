@@ -13,6 +13,8 @@ import logging
 from typing import Any
 import uuid
 
+import pyomo.environ as pyo
+
 from app.contract import contract
 from app.domain import models
 from app.domain import validation
@@ -109,6 +111,89 @@ def prepare_data(
         "preference_score": preference_score,
         "skill_fit": skill_fit,
     }
+
+
+def build_model(
+    data: dict[str, Any],
+    excluded_solutions: list[list[tuple[str, str]]] | None = None,
+) -> pyo.ConcreteModel:
+    """Builds the variables and hard constraints shared by every strategy.
+
+    Follows docs/model/ilp_formulation.tex sections 3 and 4. The objective is
+    not added here: each strategy adds its own, so the base model is written
+    once and only the objective changes.
+
+    Args:
+        data: Sets and parameters from prepare_data.
+        excluded_solutions: Earlier solutions as lists of (student, project)
+            pairs; each one gets a no-good cut so the new solution differs.
+
+    Returns:
+        The Pyomo model with variables x and y and constraints (5) to (10).
+    """
+    student_ids = data["student_ids"]
+    project_ids = data["project_ids"]
+    mandatory_projects = data["mandatory_projects"]
+
+    model = pyo.ConcreteModel('Student-project assignment')
+
+    # Decision variables
+    # x[s,p] = 1 if student s is assigned to project p, 0 otherwise (eq. 4)
+    model.x = pyo.Var(student_ids, project_ids, domain=pyo.Binary)
+    # y[p] = 1 if project p is used, 0 otherwise; only projects with a mandatory skill (eq. 5)
+    model.y = pyo.Var(mandatory_projects, domain=pyo.Binary)
+
+    # Constraint (7): each student is assigned to exactly one project (R1)
+    model.one_project_constraint = pyo.ConstraintList()
+    for s in student_ids:
+        model.one_project_constraint.add(
+            sum(model.x[s, p] for p in project_ids) == 1
+        )
+
+    # Constraint (8): headcount of each project between its minimum and maximum (R1)
+    model.lower_bound_constraint = pyo.ConstraintList()
+    for p in project_ids:
+        model.lower_bound_constraint.add(
+            sum(model.x[s, p] for s in student_ids) >= data["min_capacity"][p]
+        )
+
+    model.upper_bound_constraint = pyo.ConstraintList()
+    for p in project_ids:
+        model.upper_bound_constraint.add(
+            sum(model.x[s, p] for s in student_ids) <= data["max_capacity"][p]
+        )
+
+    # Constraint (9): fixed assignments always hold (R3)
+    model.fixed_constraint = pyo.ConstraintList()
+    for s, p in data["fixed_pairs"]:
+        model.fixed_constraint.add(
+            model.x[s, p] == 1
+        )
+
+    # Constraint (10): a used project has at least one qualified student per mandatory skill (R13)
+    model.mandatory_constraint = pyo.ConstraintList()
+    for p in mandatory_projects:
+        for t in data["mandatory_skills"][p]:
+            model.mandatory_constraint.add(
+                sum(model.x[s, p] for s in data["qualified"][p, t]) >= model.y[p]
+            )
+
+    # Constraint (11): a project with any student counts as used; u_p is the tightest big-M (R13)
+    model.used_constraint = pyo.ConstraintList()
+    for p in mandatory_projects:
+        model.used_constraint.add(
+            sum(model.x[s, p] for s in student_ids) <= data["max_capacity"][p] * model.y[p]
+        )
+
+    # Constraint (12): no-good cut, at least one student moves compared with each earlier solution (R5)
+    model.no_good_constraint = pyo.ConstraintList()
+    if excluded_solutions is not None:
+        for solution in excluded_solutions:
+            model.no_good_constraint.add(
+                sum(model.x[s, p] for s, p in solution) <= data["n"] - 1
+            )
+
+    return model
 
 
 class AssignmentStrategy(abc.ABC):
