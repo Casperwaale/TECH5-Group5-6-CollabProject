@@ -121,6 +121,12 @@ The brief requires instructor approval before the method becomes the baseline (�
 - **Why:** it represents every hard constraint exactly, and it can *prove* when no further distinct alternative exists (R5).
 - **Library: Pyomo + highspy** (HiGHS solver). Casper proposed it (2026-10-16), Victor agreed (2026-10-19). We both used Pyomo with `appsi_highs` in TECH4. Both packages must be added to `requirements.txt`. The starter docs mention PuLP/CBC only as an example.
 
+### D14. Arguments of `calculate_cost_or_utility` — PROPOSED
+- **Decision:** the abstract method in `AssignmentStrategy` takes `(data, s, p)` instead of the starter's `(student, project, max_preferences)`. It still returns the objective coefficient of `x[s,p]`, so the strategy pattern of `docs/architecture.md` §4.1 is unchanged.
+- **Why:** the coefficients need r, φ and σ, which `prepare_data` already computes, plus the cohort size n (tie-break weights ε) and the project count m (penalty rank m + 1, R14). The starter arguments carry neither n nor m, and `max_preferences` (most projects any student ranked) is not m.
+- **Impact:** none outside `app/engine/solvers.py`. Checked on every branch and open pull request (2026-10-22): no code, template or test calls the method; `test_assignment_strategy_abc` still holds because the method stays abstract.
+- **Proposed by:** Victor (2026-10-22). Confirm in the review of the step 4 pull request.
+
 ---
 
 ## Log
@@ -128,3 +134,4 @@ The brief requires instructor approval before the method becomes the baseline (�
 | Date | Decision | By |
 |---|---|---|
 | 2026-10-19 | D1 library: Pyomo + highspy | Casper, Victor |
+| 2026-10-22 | D14 proposed: strategy coefficient reads from `prepare_data` | Victor |

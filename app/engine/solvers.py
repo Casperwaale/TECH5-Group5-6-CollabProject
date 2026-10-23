@@ -96,10 +96,14 @@ def prepare_data(
     }
 
     # sigma_{s,p}: skill fit over non-mandatory requirements (eq. 3, R4); same function as the metrics
-    skill_fit = {
-        (s, p): metrics.calculate_assignment_skill_fit(student_by_id[s], project_by_id[p])[0]
-        for s in student_ids for p in project_ids
-    }
+    # The same call also lists the requirements the student is below, stored for the results
+    skill_fit = {}
+    unmet_requirements = {}
+    for s in student_ids:
+        for p in project_ids:
+            score, unmet = metrics.calculate_assignment_skill_fit(student_by_id[s], project_by_id[p])
+            skill_fit[s, p] = score
+            unmet_requirements[s, p] = unmet
 
     return {
         "student_ids": student_ids,
@@ -115,6 +119,7 @@ def prepare_data(
         "rank": rank,
         "preference_score": preference_score,
         "skill_fit": skill_fit,
+        "unmet_requirements": unmet_requirements,
     }
 
 
@@ -233,12 +238,44 @@ def solve_model(model: pyo.ConcreteModel) -> str:
     return str(condition).upper()
 
 
+def read_assignments(
+    model: pyo.ConcreteModel, data: dict[str, Any]
+) -> list[models.Assignment]:
+    """Reads the solved x values back into Assignment objects.
+
+    Args:
+        model: A model solved with status "OPTIMAL".
+        data: Sets and parameters from prepare_data.
+
+    Returns:
+        One Assignment per student, in sorted student order.
+    """
+    assignments = []
+    for s in data["student_ids"]:
+        for p in data["project_ids"]:
+            if pyo.value(model.x[s, p]) > 0.5:
+                assignments.append(models.Assignment(
+                    student_id=s,
+                    project_id=p,
+                    is_fixed=(s, p) in data["fixed_pairs"],
+                    # Unranked projects carry the penalty rank m + 1 in the model, but None here (R14)
+                    preference_rank=data["rank"][s, p] if data["rank"][s, p] <= data["m"] else None,
+                    skill_fit_score=data["skill_fit"][s, p],
+                    unmet_requirements=data["unmet_requirements"][s, p],
+                ))
+    return assignments
+
+
 class AssignmentStrategy(abc.ABC):
     """Abstract Base Class for student-to-project allocation strategies.
 
     Team B should derive concrete strategy subclasses implementing specific
     objective functions (e.g. preference satisfaction, skill fit, balanced).
+    Every strategy shares the model of build_model; a strategy only supplies
+    its objective coefficient per student-project pair and the sense.
     """
+
+    sense = pyo.minimize    # Objective direction; each subclass sets its own
 
     def __init__(self, name: str, description: str) -> None:
         """Initializes the strategy with descriptive metadata.
@@ -253,19 +290,23 @@ class AssignmentStrategy(abc.ABC):
     @abc.abstractmethod
     def calculate_cost_or_utility(
         self,
-        student: models.Student,
-        project: models.Project,
-        max_preferences: int,
+        data: dict[str, Any],
+        s: str,
+        p: str,
     ) -> float:
-        """Computes objective utility or cost weight for assigning student to project.
+        """Computes the objective coefficient for assigning student s to project p.
+
+        Reads the parameters from prepare_data instead of recomputing them from
+        the Student and Project objects, because the tie-break weights need the
+        cohort size n and the penalty rank needs the project count m (D14).
 
         Args:
-            student: The candidate student.
-            project: The target semester project.
-            max_preferences: Maximum number of preferences ranked in cohort.
+            data: Sets and parameters from prepare_data.
+            s: Student identifier.
+            p: Project identifier.
 
         Returns:
-            Numerical weight reflecting desirability in optimization objective.
+            The coefficient of x[s,p] in this strategy's objective.
         """
 
     def solve(
@@ -292,13 +333,203 @@ class AssignmentStrategy(abc.ABC):
 
         Returns:
             A tuple of (solver_status, assignments, objective_value, diagnostics).
-
-        Raises:
-            NotImplementedError: To be implemented by Team B.
+            On any status other than "OPTIMAL" the assignments are empty and
+            the objective value is None.
         """
-        raise NotImplementedError(
-            f"TODO (Team B): Implement solver logic for strategy '{self.name}'"
+        data = prepare_data(students, projects, fixed_assignments)
+        model = build_model(data, excluded_solutions)
+
+        # Objective: sum over all pairs of (this strategy's coefficient) * x[s,p].
+        # The coefficient already includes the strategy's tie-break term, e.g.
+        # Preference returns r - epsilon * sigma, so this sum is exactly Z_pref.
+        model.objective = pyo.Objective(
+            expr = sum(
+                self.calculate_cost_or_utility(data, s, p) * model.x[s, p]
+                for s in data["student_ids"] for p in data["project_ids"]
+            ),
+            sense = self.sense
         )
+
+        status = solve_model(model)
+        diagnostics = {
+            "solver_status": status,
+            "variables_count": model.nvariables(),
+            "constraints_count": model.nconstraints(),
+        }
+        if status != "OPTIMAL":
+            return status, [], None, diagnostics
+        return status, read_assignments(model, data), pyo.value(model.objective), diagnostics
+
+
+class PreferenceOrientedSolver(AssignmentStrategy):
+    """Strategy 1: minimise the total preference rank; skill fit breaks ties."""
+
+    sense = pyo.minimize
+
+    def __init__(self) -> None:
+        """Initializes the preference strategy."""
+        super().__init__(
+            name="PREFERENCE",
+            description="Minimise the total preference rank; skill fit breaks ties.",
+        )
+
+    def calculate_cost_or_utility(self, data: dict[str, Any], s: str, p: str) -> float:
+        """Returns r[s,p] - epsilon_pref * sigma[s,p] (Z_pref).
+
+        Args:
+            data: Sets and parameters from prepare_data.
+            s: Student identifier.
+            p: Project identifier.
+
+        Returns:
+            The coefficient of x[s,p] in Z_pref.
+        """
+        # Tie-break weight: the skill term totals at most n / (n + 1) < 1, so it never outweighs one rank step
+        epsilon_pref = 1 / (data["n"] + 1)
+        return data["rank"][s, p] - epsilon_pref * data["skill_fit"][s, p]
+
+
+class SkillFitOrientedSolver(AssignmentStrategy):
+    """Strategy 2: maximise the total skill fit; preference breaks ties."""
+
+    sense = pyo.maximize
+
+    def __init__(self) -> None:
+        """Initializes the skill-fit strategy."""
+        super().__init__(
+            name="SKILL_FIT",
+            description="Maximise the total skill fit; preference breaks ties.",
+        )
+
+    def calculate_cost_or_utility(self, data: dict[str, Any], s: str, p: str) -> float:
+        """Returns sigma[s,p] + epsilon_skill * phi[s,p] (Z_skill).
+
+        Args:
+            data: Sets and parameters from prepare_data.
+            s: Student identifier.
+            p: Project identifier.
+
+        Returns:
+            The coefficient of x[s,p] in Z_skill.
+        """
+        # Tie-break weight: the preference term totals at most 10^-3, a practical (not exact) priority
+        epsilon_skill = 1e-3 / data["n"]
+        return data["skill_fit"][s, p] + epsilon_skill * data["preference_score"][s, p]
+
+
+class BalancedTradeoffSolver(AssignmentStrategy):
+    """Strategy 3: protect the worst-off student first, then balance.
+
+    Solved in two stages, so no weight between fairness and efficiency has
+    to be tuned. Stage 1 finds the smallest possible worst rank theta*.
+    Stage 2 keeps every student at or below theta* and maximises an equal
+    mix of preference score and skill fit.
+    """
+
+    sense = pyo.maximize    # Direction of the stage 2 objective
+
+    def __init__(self) -> None:
+        """Initializes the balanced strategy."""
+        super().__init__(
+            name="BALANCED",
+            description="Minimise the worst rank, then balance preference and skill fit.",
+        )
+
+    def calculate_cost_or_utility(self, data: dict[str, Any], s: str, p: str) -> float:
+        """Returns lambda * phi[s,p] + (1 - lambda) * sigma[s,p] (Z_bal, stage 2).
+
+        Args:
+            data: Sets and parameters from prepare_data.
+            s: Student identifier.
+            p: Project identifier.
+
+        Returns:
+            The coefficient of x[s,p] in Z_bal.
+        """
+        # phi and sigma both lie in [0, 1], so lambda = 0.5 weighs them equally
+        balance_weight = 0.5    # lambda
+        return balance_weight * data["preference_score"][s, p] + (1 - balance_weight) * data["skill_fit"][s, p]
+
+    def solve(
+        self,
+        students: list[models.Student],
+        projects: list[models.Project],
+        fixed_assignments: list[models.FixedAssignment] | None = None,
+        excluded_solutions: list[list[tuple[str, str]]] | None = None,
+    ) -> tuple[str, list[models.Assignment], float | None, dict[str, Any]]:
+        """Solves stage 1 (min-max rank), then stage 2 (balance) on a rebuilt model.
+
+        Args:
+            students: List of students in the cohort.
+            projects: List of available semester projects.
+            fixed_assignments: Pre-assigned student-project pairs that must hold.
+            excluded_solutions: Previous solution allocations to cut out.
+
+        Returns:
+            A tuple of (solver_status, assignments, objective_value, diagnostics).
+            On any status other than "OPTIMAL" the assignments are empty and
+            the objective value is None.
+        """
+        data = prepare_data(students, projects, fixed_assignments)
+        student_ids = data["student_ids"]
+        project_ids = data["project_ids"]
+
+        # --- Stage 1: smallest possible worst rank ---
+        model = build_model(data, excluded_solutions)
+
+        # theta = worst assigned rank (eq. 6)
+        model.theta = pyo.Var(domain=pyo.NonNegativeReals)
+
+        # Constraint: theta is at least every student's assigned rank
+        model.worst_rank_constraint = pyo.ConstraintList()
+        for s in student_ids:
+            model.worst_rank_constraint.add(
+                model.theta >= sum(data["rank"][s, p] * model.x[s, p] for p in project_ids)
+            )
+
+        # Objective: minimise the worst rank
+        model.worst_rank = pyo.Objective(expr = model.theta, sense = pyo.minimize)
+
+        status = solve_model(model)
+        if status != "OPTIMAL":
+            diagnostics = {
+                "solver_status": status,
+                "variables_count": model.nvariables(),
+                "constraints_count": model.nconstraints(),
+            }
+            return status, [], None, diagnostics
+        # Ranks are integers, so round away solver tolerance before using theta* as a bound
+        theta_star = round(pyo.value(model.theta))
+
+        # --- Stage 2: best balance among the solutions with worst rank theta* ---
+        model = build_model(data, excluded_solutions)
+
+        # Constraint: no student receives a rank worse than theta*
+        model.rank_cap_constraint = pyo.ConstraintList()
+        for s in student_ids:
+            model.rank_cap_constraint.add(
+                sum(data["rank"][s, p] * model.x[s, p] for p in project_ids) <= theta_star
+            )
+
+        # Objective: maximise lambda * phi + (1 - lambda) * sigma over the assigned pairs
+        model.objective = pyo.Objective(
+            expr = sum(
+                self.calculate_cost_or_utility(data, s, p) * model.x[s, p]
+                for s in student_ids for p in project_ids
+            ),
+            sense = self.sense
+        )
+
+        status = solve_model(model)
+        diagnostics = {
+            "solver_status": status,
+            "variables_count": model.nvariables(),
+            "constraints_count": model.nconstraints(),
+            "worst_rank_bound": theta_star,
+        }
+        if status != "OPTIMAL":
+            return status, [], None, diagnostics
+        return status, read_assignments(model, data), pyo.value(model.objective), diagnostics
 
 
 class AssignmentEngine(contract.AssignmentEngineContract):
