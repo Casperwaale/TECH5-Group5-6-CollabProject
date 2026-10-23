@@ -550,8 +550,11 @@ class AssignmentEngine(contract.AssignmentEngineContract):
         self.run_repo = (
             run_repo if run_repo is not None else repositories.RunRepository()
         )
+        # Keys are the strategy keys the UI sends; this order is also the rotation order (R15)
         self.strategies: dict[str, AssignmentStrategy] = {
-            # Team B: Instantiate and register your custom strategies here
+            "PREFERENCE": PreferenceOrientedSolver(),
+            "SKILL_FIT": SkillFitOrientedSolver(),
+            "BALANCED": BalancedTradeoffSolver(),
         }
 
     def validate_inputs(
@@ -597,13 +600,131 @@ class AssignmentEngine(contract.AssignmentEngineContract):
 
         Returns:
             The created AssignmentRun populated with alternative solutions.
-
-        Raises:
-            NotImplementedError: To be implemented by Team B.
+            Its status is COMPLETED (at least one solution), INFEASIBLE,
+            INVALID_INPUT or FAILED; every run is saved, with the reasons in
+            its diagnostics.
         """
-        raise NotImplementedError(
-            "TODO (Team B): Implement execute_run in app/engine/solvers.py"
+        run = models.AssignmentRun(
+            id=str(uuid.uuid4()),
+            configuration={
+                "max_alternatives": request.max_alternatives,
+                "primary_strategy": request.strategy_key,
+                "engine": "AssignmentEngine (ILP, Pyomo + HiGHS)",
+            },
         )
+        run.diagnostics["notes"] = request.notes
+
+        # 1. Validate before solving: broken or provably infeasible input stops the run
+        outcome = self.validate_inputs(request)
+        run.diagnostics["warnings"] = outcome.warnings
+        if not outcome.is_feasible:
+            run.status = contract.RunStatus.INFEASIBLE.value
+            run.diagnostics["message"] = "The input cannot satisfy every hard constraint."
+            run.diagnostics["reasons"] = outcome.infeasibility_reasons
+            run.diagnostics["errors"] = outcome.errors
+            self.run_repo.save_run(run)
+            return run
+
+        errors = list(outcome.errors)
+        if request.strategy_key not in self.strategies:
+            errors.append(
+                f"Unknown strategy '{request.strategy_key}'; "
+                f"use one of {list(self.strategies.keys())}."
+            )
+        if request.max_alternatives < 1:
+            errors.append("At least one alternative must be requested.")
+        if not outcome.is_valid or errors:
+            run.status = contract.RunStatus.INVALID_INPUT.value
+            run.diagnostics["message"] = "The input was rejected before solving."
+            run.diagnostics["errors"] = errors
+            self.run_repo.save_run(run)
+            return run
+
+        # 2. Store the entities, because every saved assignment must point to a stored student and project
+        self._save_entities(request)
+
+        # 3. Alternatives: the requested strategy first, then the others in turn (R15),
+        #    each with no-good cuts against every earlier solution (R5)
+        keys = list(self.strategies.keys())
+        first = keys.index(request.strategy_key)
+        found = []    # earlier solutions as (student, project) pairs, for the cuts
+        status = "OPTIMAL"
+        for k in range(request.max_alternatives):
+            strategy = self.strategies[keys[(first + k) % len(keys)]]
+            status, assignments, objective_value, diagnostics = strategy.solve(
+                request.students,
+                request.projects,
+                request.fixed_assignments,
+                found,
+            )
+            if status != "OPTIMAL":
+                # Infeasible with cuts: no further distinct solution exists, whatever the objective
+                break
+            found.append([(a.student_id, a.project_id) for a in assignments])
+            run.solutions.append(models.Solution(
+                id=str(uuid.uuid4()),
+                run_id=run.id,
+                alternative_number=k + 1,
+                strategy_name=strategy.name,
+                objective_value=objective_value,
+                assignments=assignments,
+                indicators=metrics.compute_solution_indicators(
+                    request.students,
+                    request.projects,
+                    assignments,
+                    request.fixed_assignments,
+                ),
+                diagnostics=diagnostics,
+            ))
+
+        # 4. Run status and diagnostics
+        run.diagnostics["distinct_alternatives"] = len(run.solutions)
+        run.diagnostics["solver_status"] = status
+        if len(run.solutions) > 0:
+            run.status = contract.RunStatus.COMPLETED.value
+            run.diagnostics["message"] = (
+                f"Found {len(run.solutions)} distinct alternative(s) "
+                f"of {request.max_alternatives} requested."
+            )
+            if len(run.solutions) < request.max_alternatives:
+                run.diagnostics["message"] += " No further distinct feasible allocation exists."
+        elif status == "INFEASIBLE":
+            run.status = contract.RunStatus.INFEASIBLE.value
+            run.diagnostics["message"] = (
+                "The solver proved that no allocation satisfies every hard constraint "
+                "(one project each, headcounts, fixed assignments, mandatory skills)."
+            )
+            run.diagnostics["reasons"] = [
+                "Validation found no single cause; the hard constraints conflict in combination."
+            ]
+        else:
+            run.status = contract.RunStatus.FAILED.value
+            run.diagnostics["message"] = f"The solver stopped without a solution (status {status})."
+
+        # 5. Save and return
+        self.run_repo.save_run(run)
+        return run
+
+    def _save_entities(self, request: contract.RunRequest) -> None:
+        """Stores the request's skills, projects, students and fixed assignments.
+
+        Uses the run repository's database, so the run and its entities are
+        saved in the same place.
+
+        Args:
+            request: The run request containing students, projects, etc.
+        """
+        db = self.run_repo.db
+        if request.skills is not None:
+            for skill in request.skills:
+                repositories.SkillRepository(db).save(skill)
+        for project in request.projects:
+            repositories.ProjectRepository(db).save(project)
+        for student in request.students:
+            repositories.StudentRepository(db).save(student)
+        if request.fixed_assignments is not None:
+            for fixed in request.fixed_assignments:
+                repositories.FixedAssignmentRepository(db).save(fixed)
 
     def run_assignment(
         self,
