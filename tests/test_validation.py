@@ -160,3 +160,21 @@ def test_three_preferences_does_not_trigger_short_ranking_warning() -> None:
     )
     result = validation.validate_cohort([student], projects)
     assert not any("fewer than 3 projects" in warning for warning in result.warnings)
+
+def test_duplicate_preferred_project_is_invalid() -> None:
+    """A student cannot rank the same project more than once."""
+    student = models.Student(
+        id="S01", display_name="Student 1",
+        preferences=[
+            models.Preference(student_id="S01", project_id="P1", rank=1),
+            models.Preference(student_id="S01", project_id="P1", rank=2),
+        ],
+    )
+    projects = [models.Project(id="P1", title="Project 1")]
+
+    result = validation.validate_cohort([student], projects)
+
+    assert not result.is_valid
+    assert any("multiple preferences for project 'P1'" in error
+               for error in result.errors)
+
