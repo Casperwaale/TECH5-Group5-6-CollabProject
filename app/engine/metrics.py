@@ -23,19 +23,32 @@ def calculate_assignment_skill_fit(
     evaluates how well the candidate student satisfies the required technical
     skills of the target project.
 
+    The score is the mean of min(1, level / minimum_level) over the project's
+    non-mandatory requirements; mandatory requirements are hard constraints
+    and do not count (R4). A project without non-mandatory requirements gives
+    1.0. The unmet list covers every requirement, mandatory or not, that the
+    student is below, in the project's requirement order.
+
     Args:
         student: The student under evaluation.
         project: The project under evaluation.
 
     Returns:
         A tuple of (skill_fit_score [0.0, 1.0], list_of_unmet_skill_ids).
-
-    Raises:
-        NotImplementedError: To be implemented by Team B.
     """
-    raise NotImplementedError(
-        "TODO (Team B): Implement calculate_assignment_skill_fit"
-    )
+    ratios = []
+    unmet = []
+    for req in project.requirements:
+        level = student.get_skill_level(req.skill_id)
+        if level < req.minimum_level:
+            unmet.append(req.skill_id)
+        if not req.is_mandatory:
+            # minimum_level >= 1 is guaranteed by validation and the schema (R7)
+            ratios.append(min(1.0, level / req.minimum_level))
+
+    if not ratios:
+        return 1.0, unmet
+    return sum(ratios) / len(ratios), unmet
 
 
 def calculate_gini(values: list[float]) -> float:
