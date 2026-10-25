@@ -6,10 +6,6 @@ from app.domain import models
 from app.engine import metrics
 
 
-@pytest.mark.xfail(
-    raises=NotImplementedError,
-    reason="TODO (Team B): Implement calculate_gini",
-)
 def test_gini_calculation() -> None:
     """Verifies that Gini coefficient calculation matches expectations."""
     # Complete equality
