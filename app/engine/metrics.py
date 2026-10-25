@@ -121,8 +121,167 @@ def compare_two_solutions(
             "delta_metrics": dict[str, Any],
             "trade_off_summary": list[str]
         }
-
-    Raises:
-        NotImplementedError: To be implemented by Team B.
     """
-    raise NotImplementedError("TODO (Team B): Implement compare_two_solutions")
+    map_a = {a.student_id: a for a in solution_a.assignments}
+    map_b = {b.student_id: b for b in solution_b.assignments}
+    penalty = _penalty_rank(solution_a, solution_b)
+
+    changed: list[dict[str, Any]] = []
+    rank_improved = 0
+    rank_worsened = 0
+    for s_id in sorted(map_a.keys() & map_b.keys()):
+        asg_a = map_a[s_id]
+        asg_b = map_b[s_id]
+        if asg_a.project_id == asg_b.project_id:
+            continue
+
+        # Unranked projects count as rank |P| + 1 (R14).
+        r_a = asg_a.preference_rank if asg_a.preference_rank is not None else penalty
+        r_b = asg_b.preference_rank if asg_b.preference_rank is not None else penalty
+        if r_b < r_a:
+            rank_change = "IMPROVED"
+            rank_improved += 1
+        elif r_b > r_a:
+            rank_change = "WORSENED"
+            rank_worsened += 1
+        else:
+            rank_change = "SAME"
+
+        changed.append(
+            {
+                "student_id": s_id,
+                "student_name": s_id,
+                "project_a": asg_a.project_id,
+                "project_a_id": asg_a.project_id,
+                "project_a_title": asg_a.project_id,
+                "rank_a": asg_a.preference_rank,
+                "skill_fit_a": asg_a.skill_fit_score,
+                "project_b": asg_b.project_id,
+                "project_b_id": asg_b.project_id,
+                "project_b_title": asg_b.project_id,
+                "rank_b": asg_b.preference_rank,
+                "skill_fit_b": asg_b.skill_fit_score,
+                "rank_delta": r_b - r_a,
+                "rank_change": rank_change,
+            }
+        )
+
+    ind_a = solution_a.indicators or {}
+    ind_b = solution_b.indicators or {}
+    delta_metrics: dict[str, Any] = {
+        "mean_skill_fit_delta": _indicator_delta(
+            ind_a, ind_b, "efficiency", "mean_skill_fit"
+        ),
+        "mean_rank_delta": _indicator_delta(ind_a, ind_b, "fairness", "mean_rank"),
+        "gini_delta": _indicator_delta(ind_a, ind_b, "fairness", "rank_gini"),
+        "rank_variance_delta": _indicator_delta(
+            ind_a, ind_b, "fairness", "rank_variance"
+        ),
+        "unranked_count_delta": _indicator_delta(
+            ind_a, ind_b, "fairness", "unranked_count"
+        ),
+    }
+
+    summary: list[str] = []
+    if changed:
+        summary.append(
+            f"{len(changed)} student(s) are allocated to a different project "
+            "in Solution B."
+        )
+    else:
+        summary.append("Solutions A and B have identical allocations.")
+    summary.append(
+        f"{rank_improved} student(s) get a better-ranked project, "
+        f"{rank_worsened} a worse-ranked one."
+    )
+    labels = {
+        "mean_skill_fit_delta": "Mean skill fit",
+        "mean_rank_delta": "Mean preference rank",
+        "gini_delta": "Rank Gini coefficient",
+    }
+    for key, label in labels.items():
+        delta = delta_metrics[key]
+        if delta is None:
+            summary.append(f"{label} change not available.")
+        elif delta == 0:
+            summary.append(f"{label} is unchanged.")
+        else:
+            direction = "increases" if delta > 0 else "decreases"
+            summary.append(f"{label} {direction} by {abs(delta)} in Solution B.")
+
+    mean_fit_delta = delta_metrics["mean_skill_fit_delta"]
+    mean_rank_delta = delta_metrics["mean_rank_delta"]
+    unranked_delta = delta_metrics["unranked_count_delta"]
+    return {
+        "solution_a_id": solution_a.id,
+        "solution_a_alt": solution_a.alternative_number,
+        "solution_b_id": solution_b.id,
+        "solution_b_alt": solution_b.alternative_number,
+        "is_distinct": len(changed) > 0,
+        "changed_students_count": len(changed),
+        "total_students": len(map_a.keys() | map_b.keys()),
+        "changed_assignments": changed,
+        "rank_improved_count": rank_improved,
+        "rank_worsened_count": rank_worsened,
+        "delta_metrics": delta_metrics,
+        "delta_mean_skill_fit": mean_fit_delta if mean_fit_delta is not None else 0.0,
+        "delta_mean_rank": mean_rank_delta if mean_rank_delta is not None else 0.0,
+        "delta_unranked_count": (
+            int(unranked_delta) if unranked_delta is not None else 0
+        ),
+        "trade_off_summary": summary,
+    }
+
+
+def _penalty_rank(
+    solution_a: models.Solution,
+    solution_b: models.Solution,
+) -> int:
+    """Returns the penalty rank |P| + 1 for unranked assignments (R14).
+
+    |P| is read from the per-project capacity indicators. If neither solution
+    has them, falls back to the largest rank seen in either solution plus one.
+
+    Args:
+        solution_a: Baseline solution.
+        solution_b: Alternative solution.
+
+    Returns:
+        The rank assigned to a student placed on a project they did not rank.
+    """
+    for solution in (solution_a, solution_b):
+        projects = (solution.indicators or {}).get("capacity", {}).get("projects")
+        if projects:
+            return len(projects) + 1
+    ranks = [
+        a.preference_rank
+        for a in solution_a.assignments + solution_b.assignments
+        if a.preference_rank is not None
+    ]
+    return max(ranks, default=0) + 1
+
+
+def _indicator_delta(
+    ind_a: dict[str, Any],
+    ind_b: dict[str, Any],
+    group: str,
+    key: str,
+    digits: int = 4,
+) -> float | None:
+    """Computes the rounded delta B minus A for one indicator.
+
+    Args:
+        ind_a: Indicators of the baseline solution.
+        ind_b: Indicators of the alternative solution.
+        group: Indicator group, e.g. "efficiency" or "fairness".
+        key: Indicator key inside the group, e.g. "mean_rank".
+        digits: Decimal places to round to.
+
+    Returns:
+        The rounded difference, or None if either value is missing.
+    """
+    value_a = ind_a.get(group, {}).get(key)
+    value_b = ind_b.get(group, {}).get(key)
+    if value_a is None or value_b is None:
+        return None
+    return round(value_b - value_a, digits)
