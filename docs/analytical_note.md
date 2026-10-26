@@ -205,35 +205,87 @@ Tags R1–R17 are references to `docs/team_b_decisions.md`, not symbols.
 
 Define the mathematical formulation for all evaluation metrics implemented in `app/engine/metrics.py`:
 
+All indicators are computed by `compute_solution_indicators` from a finished list of assignments, so every strategy is scored by the same function. Means, the rank variance and the Gini coefficient are rounded to 4 decimals; percentages are rounded to 1 decimal. Counts and the worst rank are integers. The output keys are fixed, because `recommendations.py` and the templates read them (R11).
+
 ### 3.1 Feasibility Indicators
 - Allocation completeness: $\sum_{s \in S} \sum_{p \in P} x_{s,p} = |S|$
+
+  The code checks the stronger per-student form, $\sum_{p \in P} x_{s,p} = 1$ for every $s \in S$ (R1), because a total of $\lvert S \rvert$ could hide one student assigned twice and another not at all. A missing or duplicate assignment, or an assignment that refers to an unknown student or project, is a violation.
 - Capacity compliance check for all $p \in P$
+
+  $$l_p \le \sum_{s \in S} x_{s,p} \le u_p \qquad \forall p \in P$$
+
+  A breach of either bound is a violation.
 - Fixed lock adherence check
+
+  Every locked pair must appear in the solution: $x_{s,p} = 1$ for all $(s, p) \in F$ (R3).
 - Mandatory requirement fulfillment count
+
+  Per R13, each used project must have at least one assigned student who meets each of its mandatory requirements:
+
+  $$\sum_{s \in Q_{p,t}} x_{s,p} \ge 1 \qquad \forall p \in P^{E} \text{ with } \sum_{s \in S} x_{s,p} \ge 1,\ t \in E_p$$
+
+  Empty projects are skipped. The code does not report a count of fulfilled requirements; it adds one violation for each unmet (project, mandatory skill) pair.
+
+The solution is feasible (`feasibility.is_feasible`) exactly when the list of violations is empty. The code also reports `assigned_count` and `total_students`.
 
 ### 3.2 Efficiency Indicators
 - **Mean Skill-Fit Score ($\bar{\sigma}$):**
   $$\bar{\sigma} = \frac{1}{|S|} \sum_{s \in S} \sum_{p \in P} \sigma_{s,p} \cdot x_{s,p}$$
+
+  $\sigma_{s,p}$ is the skill fit from §2.2 (R4): the mean of $\min(1, \alpha_{s,t} / \beta_{p,t})$ over the non-mandatory requirements $T_p^{\text{soft}}$, and $1$ if the project has none. Mandatory requirements are left out because they are hard constraints (§3.1). The code reads $\sigma_{s,p}$ from each assignment's stored `skill_fit_score`, which `calculate_assignment_skill_fit` sets, and divides by the number of assignments; in a complete solution that number is $\lvert S \rvert$. An empty solution gives $0$. Key: `efficiency.mean_skill_fit`, with the total $\sum_{s} \sum_{p} \sigma_{s,p} \, x_{s,p}$ in `efficiency.total_skill_fit_sum`.
 - **Mean Preference Rank ($\bar{r}$):**
   $$\bar{r} = \frac{1}{|S|} \sum_{s \in S} \sum_{p \in P} r_{s,p} \cdot x_{s,p}$$
+
+  $r_{s,p}$ includes the penalty rank $m + 1$ for unranked projects (R14). The code reports this value as a fairness indicator, `fairness.mean_rank` (§3.3).
+- **Unmet Soft Requirements Count:** the number of (student, non-mandatory requirement) pairs where the assigned student is below the required level:
+
+  $$\sum_{s \in S} \sum_{p \in P} x_{s,p} \, \bigl\lvert \{ t \in T_p^{\text{soft}} : \alpha_{s,t} < \beta_{p,t} \} \bigr\rvert$$
+
+  Gaps in mandatory requirements are not counted here; §3.1 covers them. Key: `efficiency.unmet_soft_requirements_count`.
 
 ### 3.3 Fairness Indicators
 *Section 6.3 of the specification mandates: rank distribution, unranked count, worst assigned rank, and ONE proposed and justified fairness indicator.*
 
+Throughout, $r_s = \sum_{p \in P} r_{s,p} \, x_{s,p}$ is the rank that student $s$ receives. A student placed on a project they did not rank counts as rank $m + 1$ (R14) in the mean rank, the worst rank, the variance and the Gini coefficient. `Assignment.preference_rank` itself stays `None` for these students.
+
 1. **Rank Distribution:** Histogram vector $[c_1, c_2, \dots, c_m, c_{\text{unr}}]$ where $c_h$ is the number of students assigned to their $h$-th choice.
+
+   The code returns this as a sparse dictionary: a key `rank_h` appears only for ranks that occur, and `unranked` only when $c_{\text{unr}} > 0$; a missing key means a count of $0$.
 2. **Unranked Allocation Count ($c_{\text{unr}}$):** Count of students allocated outside their submitted preference list.
+
+   $$c_{\text{unr}} = \bigl\lvert \{ s \in S : r_s = m + 1 \} \bigr\rvert, \qquad \text{unranked\_pct} = \frac{c_{\text{unr}}}{n} \times 100\%$$
 3. **Worst Assigned Rank ($r_{\max}$):**
    $$r_{\max} = \max_{(s,p) : x_{s,p}=1} r_{s,p}$$
+
+   Because $r_{s,p}$ includes the penalty, $r_{\max} = m + 1$ whenever at least one student is unranked. An empty solution gives $0$.
 4. **Team's Proposed Fairness Indicator (e.g., Gini Coefficient or Rank Variance):**
    *Provide the mathematical formula, justification, and interpretation:*
    With $r_s = \sum_{p \in P} r_{s,p} \, x_{s,p}$ the rank assigned to student $s$:
    $$G = \frac{\sum_{s \in S} \sum_{s' \in S} |r_s - r_{s'}|}{2 n \sum_{s \in S} r_s}$$
-   *[Explain why this metric captures inequality among student outcomes]*
+
+   We report the Gini coefficient of the assigned ranks (R9). The mean rank hides how outcomes are spread: two students who both get their second choice and two students who get their first and third choice have the same $\bar{r} = 2$, but Gini values of $0$ and $0.25$. Gini compares every pair of students, so it rises when some students do much better than others. $G = 0$ means every student received the same rank, and higher values mean more unequal outcomes (at most $(n - 1)/n$). Because the pairwise differences are divided by the total rank, $G$ is scale-independent: multiplying every rank by the same constant leaves it unchanged.
+
+   `calculate_gini` returns $0$ for an empty list or a list of zeros, and rejects negative values. Since every $r_s \ge 1$, the denominator is positive for any non-empty solution. Key: `fairness.rank_gini`.
+
+   As a second spread measure, the code reports the population variance of the assigned ranks (key `fairness.rank_variance`):
+
+   $$\operatorname{Var}(r) = \frac{1}{n} \sum_{s \in S} \left( r_s - \bar{r} \right)^2$$
+
+   We divide by $n$, not $n - 1$, because the cohort is the whole population, not a sample. The balanced recommendation in `recommendations.py` ranks solutions by Gini first and variance second (R9).
 
 ### 3.4 Capacity Utilization Metrics
 - Per-project utilization percentage:
   $$\text{Util}_p = \frac{\sum_{s \in S} x_{s,p}}{u_p} \times 100\%$$
+
+  A project with $u_p = 0$ reports $0$. Each project entry also reports `assigned_count`, `min_capacity` and `max_capacity`.
 - Aggregate cohort capacity slack and tightness
+
+  Overall utilization divides all assigned students by all seats:
+
+  $$\text{Util} = \frac{\sum_{s \in S} \sum_{p \in P} x_{s,p}}{\sum_{p \in P} u_p} \times 100\%$$
+
+  It is $0$ if there are no seats. Key: `capacity.overall_utilization_pct`. The code does not report slack as a separate key; it reports `total_assigned` and `total_capacity`, so the slack is $\sum_{p \in P} u_p - n$ seats. A value near $100\%$ means a tight instance with few spare seats.
 
 ---
 
@@ -246,11 +298,27 @@ $$\Delta \bar{r} = \bar{r}_B - \bar{r}_A$$
 $$\Delta r_{\max} = r_{\max, B} - r_{\max, A}$$
 $$\Delta G = G_B - G_A$$
 
+`compare_two_solutions` takes each delta from the indicators already stored on the two solutions, always as B minus A, and rounds it to 4 decimals. The code does not compute $\Delta r_{\max}$; instead it reports the deltas of the rank variance and the unranked count:
+
+$$\Delta \operatorname{Var}(r) = \operatorname{Var}(r)_B - \operatorname{Var}(r)_A, \qquad \Delta c_{\text{unr}} = c_{\text{unr}, B} - c_{\text{unr}, A}$$
+
+If either solution lacks an indicator, its delta in `delta_metrics` is `None` and the summary says "not available"; the flat keys `delta_mean_skill_fit`, `delta_mean_rank` and `delta_unranked_count` then fall back to $0$ (R11).
+
+How to read the signs: a positive $\Delta \bar{\sigma}$ means B has better skill fit. A positive $\Delta \bar{r}$, $\Delta G$, $\Delta \operatorname{Var}(r)$ or $\Delta c_{\text{unr}}$ means B is worse on that indicator. The `trade_off_summary` turns these deltas into plain sentences.
+
 ### 4.2 Allocation Diff & Displaced Student Identification
 Define how student re-allocations are classified:
 - **Changed Assignments:** $\{(s, p_A, p_B) : x_{s, p_A}^{(A)} = 1 \land x_{s, p_B}^{(B)} = 1 \land p_A \ne p_B\}$
+
+  The code walks the students present in both solutions in ascending student ID order and keeps those whose project differs. Each entry records both projects, both stated ranks, both skill-fit scores, `rank_delta` and `rank_change`. A student present in only one solution is not listed. `is_distinct` is true exactly when this set is non-empty, and `changed_students_count` is its size.
 - **Worsened Students ($\Delta r_s > 0$):** Students whose preference rank worsened in Solution B.
 - **Improved Students ($\Delta r_s < 0$):** Students whose preference rank improved in Solution B.
+
+The rank change of student $s$ is
+
+$$\Delta r_s = r_s^{(B)} - r_s^{(A)}$$
+
+with unranked projects at rank $m + 1$ (R14). The code reads $m$ from the per-project capacity indicators; if neither solution has them, it falls back to the largest stated rank plus one. A student is `WORSENED` if $\Delta r_s > 0$, `IMPROVED` if $\Delta r_s < 0$ and `SAME` if $\Delta r_s = 0$ (for example, a move between two unranked projects). Only changed students are classified, since a student who keeps the same project keeps the same rank. The totals are `rank_improved_count` and `rank_worsened_count`.
 
 ---
 
