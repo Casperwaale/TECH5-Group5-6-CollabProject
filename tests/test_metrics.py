@@ -39,10 +39,6 @@ def test_skill_fit_calculation() -> None:
     assert unmet == ["sql"]
 
 
-@pytest.mark.xfail(
-    raises=NotImplementedError,
-    reason="TODO (Team B): Implement compute_solution_indicators",
-)
 def test_solution_indicators_calculation() -> None:
     """Verifies full indicator computation for a solution."""
     students = [
