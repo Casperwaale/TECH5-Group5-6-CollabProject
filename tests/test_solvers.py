@@ -46,8 +46,9 @@ def test_assignment_engine_raises_not_implemented(tmp_path: pathlib.Path) -> Non
         assert "mean_rank" in solution.indicators["fairness"]
 
 
-def test_distinct_alternatives_generation() -> None:
+def test_distinct_alternatives_generation(tmp_path: pathlib.Path) -> None:
     """Verifies AssignmentEngine produces distinct alternatives."""
+    create_app({"TESTING": True, "DATABASE_PATH": tmp_path / "solvers.db"})
     benchmark = demo_data.get_standard_scenario()
     engine = solvers.AssignmentEngine()
 
