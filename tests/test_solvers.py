@@ -46,10 +46,6 @@ def test_assignment_engine_raises_not_implemented(tmp_path: pathlib.Path) -> Non
         assert "mean_rank" in solution.indicators["fairness"]
 
 
-@pytest.mark.xfail(
-    raises=NotImplementedError,
-    reason="TODO (Team B): Implement optimization solver and alternative generation",
-)
 def test_distinct_alternatives_generation() -> None:
     """Verifies AssignmentEngine produces distinct alternatives."""
     benchmark = demo_data.get_standard_scenario()
