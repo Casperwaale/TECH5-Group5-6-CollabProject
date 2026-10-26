@@ -45,6 +45,10 @@ def calculate_gini(values: list[float]) -> float:
     coefficient measures the inequality/fairness in student preference rank
     distribution (0.0 represents perfect equality, 1.0 represents extreme inequality).
 
+    Uses G = sum_i sum_j |r_i - r_j| / (2 * n * sum_i r_i) from the
+    analytical note, section 3.3 (R9). An empty series or a series of only
+    zeros has no inequality to measure and gives 0.0.
+
     Args:
         values: Non-negative numerical series (e.g. assigned preference ranks).
 
@@ -52,9 +56,19 @@ def calculate_gini(values: list[float]) -> float:
         The Gini coefficient in [0.0, 1.0].
 
     Raises:
-        NotImplementedError: To be implemented by Team B.
+        ValueError: If any value is negative.
     """
-    raise NotImplementedError("TODO (Team B): Implement calculate_gini")
+    if any(v < 0 for v in values):
+        raise ValueError("Gini coefficient requires non-negative values")
+
+    n = len(values)
+    total = sum(values)
+    # No students, or everyone at zero: perfect equality, and avoids 0/0
+    if n == 0 or total == 0:
+        return 0.0
+
+    abs_diff_sum = sum(abs(a - b) for a in values for b in values)
+    return abs_diff_sum / (2 * n * total)
 
 
 def compute_solution_indicators(
