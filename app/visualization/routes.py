@@ -532,14 +532,22 @@ def update_project(project_id: str) -> flask.Response:
 
 @web_bp.post("/projects/<project_id>/delete")
 def delete_project(project_id: str) -> flask.Response:
-    """Deletes a project.
+    """Deletes a project and the records that depend on it."""
+    target = flask.url_for("visualization_web.list_projects")
+    if not auth.can_edit_cohort_data():
+        flask.flash("Permission denied for current role.", "danger")
+        return flask.redirect(target)
 
-    Raises:
-        NotImplementedError: To be implemented by Team A.
-    """
-    raise NotImplementedError(
-        "TODO (Team A): Implement project deletion"
-    )
+    if repositories.ProjectRepository().delete(project_id):
+        flask.flash(
+            f"Project '{project_id}' removed. Its skill requirements, student "
+            "preferences, fixed assignments and saved assignments for it were "
+            "removed too.",
+            "info",
+        )
+    else:
+        flask.flash(f"Project '{project_id}' not found.", "warning")
+    return flask.redirect(target)
 
 
 # -----------------------------------------------------------------------------
