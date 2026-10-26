@@ -8,6 +8,7 @@ student-project skill fit, Gini inequality, solution indicators, and
 side-by-side trade-off comparisons.
 """
 
+import collections
 from typing import Any
 
 from app.domain import models
@@ -98,6 +99,13 @@ def compute_solution_indicators(
     3. Fairness: Rank distribution, mean rank, worst rank, unranked count, Gini.
     4. Capacity: Total assigned, total capacity, overall utilization, per-project.
 
+    Skill fit is read from each assignment's stored score. A student placed
+    on a project they did not rank counts as rank |P| + 1 in every rank
+    indicator and in unranked_count (R14). Only non-mandatory requirements
+    count as unmet soft requirements (R4). Rank variance is the population
+    variance over the cohort. Means, variance and Gini are rounded to four
+    decimals, percentages to one.
+
     Args:
         students: Complete cohort of students.
         projects: Catalog of semester projects.
@@ -112,13 +120,142 @@ def compute_solution_indicators(
             "fairness": {"mean_rank": float, "worst_rank": int, "rank_gini": float, ...},
             "capacity": {"overall_utilization_pct": float, "projects": dict, ...}
         }
-
-    Raises:
-        NotImplementedError: To be implemented by Team B.
     """
-    raise NotImplementedError(
-        "TODO (Team B): Implement compute_solution_indicators"
-    )
+    student_by_id = {s.id: s for s in students}
+    project_by_id = {p.id: p for p in projects}
+    penalty = len(projects) + 1
+    n = len(assignments)
+
+    # --- Feasibility: one project each, headcounts, fixed locks, mandatory skills ---
+    violations: list[str] = []
+    per_student = collections.Counter(a.student_id for a in assignments)
+    per_project = collections.Counter(a.project_id for a in assignments)
+
+    for s in students:
+        if per_student[s.id] == 0:
+            violations.append(f"Student {s.id} is not assigned to any project.")
+        elif per_student[s.id] > 1:
+            violations.append(
+                f"Student {s.id} is assigned to {per_student[s.id]} projects."
+            )
+    for s_id in sorted(per_student.keys() - student_by_id.keys()):
+        violations.append(f"Assignment refers to unknown student {s_id}.")
+    for p_id in sorted(per_project.keys() - project_by_id.keys()):
+        violations.append(f"Assignment refers to unknown project {p_id}.")
+
+    for p in projects:
+        count = per_project[p.id]
+        if count < p.min_capacity:
+            violations.append(
+                f"Project {p.id} has {count} student(s), below its minimum of "
+                f"{p.min_capacity}."
+            )
+        if count > p.max_capacity:
+            violations.append(
+                f"Project {p.id} has {count} student(s), above its maximum of "
+                f"{p.max_capacity}."
+            )
+
+    assigned_pairs = {(a.student_id, a.project_id) for a in assignments}
+    for fixed in fixed_assignments or []:
+        if (fixed.student_id, fixed.project_id) not in assigned_pairs:
+            violations.append(
+                f"Fixed assignment of {fixed.student_id} to {fixed.project_id} "
+                "is not preserved."
+            )
+
+    # A used project needs at least one qualified student per mandatory skill (R13)
+    for p in projects:
+        members = [
+            student_by_id[a.student_id]
+            for a in assignments
+            if a.project_id == p.id and a.student_id in student_by_id
+        ]
+        if not members:
+            continue
+        for req in p.requirements:
+            if req.is_mandatory and not any(
+                m.get_skill_level(req.skill_id) >= req.minimum_level
+                for m in members
+            ):
+                violations.append(
+                    f"Project {p.id} has no student meeting mandatory skill "
+                    f"{req.skill_id} at level {req.minimum_level}."
+                )
+
+    # --- Efficiency ---
+    fit_sum = sum(a.skill_fit_score for a in assignments)
+    unmet_soft = 0
+    for a in assignments:
+        project = project_by_id.get(a.project_id)
+        if project is None:
+            continue
+        soft_skills = {
+            req.skill_id for req in project.requirements if not req.is_mandatory
+        }
+        unmet_soft += sum(1 for skill in a.unmet_requirements if skill in soft_skills)
+
+    # --- Fairness: unranked projects count as rank |P| + 1 (R14) ---
+    ranks = [
+        a.preference_rank if a.preference_rank is not None else penalty
+        for a in assignments
+    ]
+    stated = [a.preference_rank for a in assignments if a.preference_rank is not None]
+    unranked = n - len(stated)
+    rank_distribution: dict[str, int] = {
+        f"rank_{r}": stated.count(r) for r in sorted(set(stated))
+    }
+    if unranked > 0:
+        rank_distribution["unranked"] = unranked
+
+    mean_rank = sum(ranks) / n if n else 0.0
+    rank_variance = sum((r - mean_rank) ** 2 for r in ranks) / n if n else 0.0
+
+    # --- Capacity ---
+    total_capacity = sum(p.max_capacity for p in projects)
+
+    return {
+        "feasibility": {
+            "is_feasible": not violations,
+            "violations": violations,
+            "assigned_count": n,
+            "total_students": len(students),
+        },
+        "efficiency": {
+            "mean_skill_fit": round(fit_sum / n, 4) if n else 0.0,
+            "unmet_soft_requirements_count": unmet_soft,
+            "total_skill_fit_sum": round(fit_sum, 4),
+        },
+        "fairness": {
+            "rank_distribution": rank_distribution,
+            "unranked_count": unranked,
+            "unranked_pct": round(unranked / n * 100.0, 1) if n else 0.0,
+            "worst_rank": max(ranks, default=0),
+            "mean_rank": round(mean_rank, 4),
+            "rank_variance": round(rank_variance, 4),
+            "rank_gini": round(calculate_gini(ranks), 4),
+        },
+        "capacity": {
+            "total_assigned": n,
+            "total_capacity": total_capacity,
+            "overall_utilization_pct": (
+                round(n / total_capacity * 100.0, 1) if total_capacity > 0 else 0.0
+            ),
+            "projects": {
+                p.id: {
+                    "assigned_count": per_project[p.id],
+                    "min_capacity": p.min_capacity,
+                    "max_capacity": p.max_capacity,
+                    "utilization_pct": (
+                        round(per_project[p.id] / p.max_capacity * 100.0, 1)
+                        if p.max_capacity > 0
+                        else 0.0
+                    ),
+                }
+                for p in projects
+            },
+        },
+    }
 
 
 def compare_two_solutions(

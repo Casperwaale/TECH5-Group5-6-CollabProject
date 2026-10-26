@@ -1,7 +1,10 @@
 """Unit tests for optimization solvers and distinct alternative generation."""
 
+import pathlib
+
 import pytest
 
+from app import create_app
 from app.contract import contract
 from app.domain import models
 from app.engine import solvers
@@ -25,17 +28,22 @@ def test_assignment_engine_initialization() -> None:
         assert strategy.name == key
 
 
-def test_assignment_engine_raises_not_implemented() -> None:
-    """Verifies that execute_run raises NotImplementedError for Team B."""
+def test_assignment_engine_raises_not_implemented(tmp_path: pathlib.Path) -> None:
+    """Verifies that execute_run completes a run with indicators (R8)."""
+    create_app({"TESTING": True, "DATABASE_PATH": tmp_path / "test_solvers.db"})
     engine = solvers.AssignmentEngine()
     benchmark = demo_data.get_standard_scenario()
     request = contract.RunRequest(
         students=benchmark["students"],
         projects=benchmark["projects"],
+        skills=benchmark["skills"],
     )
-    with pytest.raises(NotImplementedError) as exc_info:
-        engine.execute_run(request)
-    assert "TODO (Team B)" in str(exc_info.value)
+    run = engine.execute_run(request)
+    assert run.status == "COMPLETED"
+    assert len(run.solutions) >= 1
+    for solution in run.solutions:
+        assert len(solution.assignments) == len(benchmark["students"])
+        assert "mean_rank" in solution.indicators["fairness"]
 
 
 @pytest.mark.xfail(
