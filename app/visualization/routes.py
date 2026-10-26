@@ -388,73 +388,59 @@ def new_project_form() -> str:
     )
 
 
-@web_bp.post("/projects/new")
-def create_project() -> flask.Response:
-    """Processes creation of a project."""
-    target = flask.url_for("visualization_web.list_projects")
-    form_page = flask.url_for("visualization_web.new_project_form")
-    if not auth.can_edit_cohort_data():
-        flask.flash("Permission denied for current role.", "danger")
-        return flask.redirect(target)
+def _parse_project_form(
+    project_id: str,
+) -> tuple[models.Project | None, str]:
+    """Reads and validates the project form fields.
 
-    project_id = flask.request.form.get("id", "").strip()
-    title = flask.request.form.get("title", "").strip()
-    description = flask.request.form.get("description", "").strip()
+    Shared by project creation and project editing.
 
-    if not project_id or not title:
-        flask.flash("Project ID and title are required.", "warning")
-        return flask.redirect(form_page)
+    Args:
+        project_id: Identifier of the project being created or edited.
 
-    if repositories.ProjectRepository().get_by_id(project_id):
-        flask.flash(f"Project '{project_id}' already exists.", "danger")
-        return flask.redirect(form_page)
-    
-    min_text = flask.request.form.get("min_capacity", "").strip() or "0"
-    max_text = flask.request.form.get("max_capacity", "").strip()
+    Returns:
+        A tuple of (project, error_message). On success the error message
+        is empty; on invalid input the project is None.
+    """
+    form = flask.request.form
+    title = form.get("title", "").strip()
+    description = form.get("description", "").strip()
+    if not title:
+        return None, "Project title is required."
+
+    min_text = form.get("min_capacity", "").strip() or "0"
+    max_text = form.get("max_capacity", "").strip()
     try:
         min_capacity = int(min_text)
         max_capacity = int(max_text)
     except ValueError:
-        flask.flash("Capacities must be whole numbers.", "warning")
-        return flask.redirect(form_page)
+        return None, "Capacities must be whole numbers."
 
     if min_capacity < 0 or max_capacity < 1 or min_capacity > max_capacity:
-        flask.flash(
+        return None, (
             "Invalid capacity: minimum must be 0 or more, maximum at least 1, "
-            "and minimum cannot be larger than maximum.",
-            "warning",
+            "and minimum cannot be larger than maximum."
         )
-        return flask.redirect(form_page)
 
     requirements = []
     for skill in repositories.SkillRepository().list_all():
-        level_text = (
-            flask.request.form.get(f"req_level_{skill.id}", "").strip() or "0"
-        )
-        is_mandatory = flask.request.form.get(f"req_mand_{skill.id}") == "1"
+        level_text = form.get(f"req_level_{skill.id}", "").strip() or "0"
+        is_mandatory = form.get(f"req_mand_{skill.id}") == "1"
 
         try:
             level = int(level_text)
         except ValueError:
-            flask.flash(
-                f"Level for '{skill.name}' must be a whole number.", "warning"
-            )
-            return flask.redirect(form_page)
+            return None, f"Level for '{skill.name}' must be a whole number."
 
         if level < 0 or level > 5:
-            flask.flash(
-                f"Level for '{skill.name}' must be between 0 and 5.", "warning"
-            )
-            return flask.redirect(form_page)
+            return None, f"Level for '{skill.name}' must be between 0 and 5."
 
         if level == 0:
             if is_mandatory:
-                flask.flash(
+                return None, (
                     f"'{skill.name}' is marked mandatory but has level 0. "
-                    "Choose a level from 1 to 5.",
-                    "warning",
+                    "Choose a level from 1 to 5."
                 )
-                return flask.redirect(form_page)
             continue
 
         requirements.append(
@@ -465,17 +451,43 @@ def create_project() -> flask.Response:
                 is_mandatory=is_mandatory,
             )
         )
-    repositories.ProjectRepository().save(
-        models.Project(
-            id=project_id,
-            title=title,
-            description=description,
-            min_capacity=min_capacity,
-            max_capacity=max_capacity,
-            requirements=requirements,
-        )
+
+    project = models.Project(
+        id=project_id,
+        title=title,
+        description=description,
+        min_capacity=min_capacity,
+        max_capacity=max_capacity,
+        requirements=requirements,
     )
-    flask.flash(f"Project '{title}' created successfully.", "success")
+    return project, ""
+
+
+@web_bp.post("/projects/new")
+def create_project() -> flask.Response:
+    """Processes creation of a project."""
+    target = flask.url_for("visualization_web.list_projects")
+    form_page = flask.url_for("visualization_web.new_project_form")
+    if not auth.can_edit_cohort_data():
+        flask.flash("Permission denied for current role.", "danger")
+        return flask.redirect(target)
+
+    project_id = flask.request.form.get("id", "").strip()
+    if not project_id:
+        flask.flash("Project ID is required.", "warning")
+        return flask.redirect(form_page)
+
+    if repositories.ProjectRepository().get_by_id(project_id):
+        flask.flash(f"Project '{project_id}' already exists.", "danger")
+        return flask.redirect(form_page)
+
+    project, error = _parse_project_form(project_id)
+    if project is None:
+        flask.flash(error, "warning")
+        return flask.redirect(form_page)
+
+    repositories.ProjectRepository().save(project)
+    flask.flash(f"Project '{project.title}' created successfully.", "success")
     return flask.redirect(target)
 
 
