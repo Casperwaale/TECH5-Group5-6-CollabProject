@@ -507,14 +507,27 @@ def edit_project_form(project_id: str) -> Any:
 
 @web_bp.post("/projects/<project_id>/edit")
 def update_project(project_id: str) -> flask.Response:
-    """Updates an existing project entity.
-
-    Raises:
-        NotImplementedError: To be implemented by Team A.
-    """
-    raise NotImplementedError(
-        "TODO (Team A): Implement project update and requirement parsing"
+    """Updates an existing project entity."""
+    target = flask.url_for("visualization_web.list_projects")
+    form_page = flask.url_for(
+        "visualization_web.edit_project_form", project_id=project_id
     )
+    if not auth.can_edit_cohort_data():
+        flask.flash("Permission denied for current role.", "danger")
+        return flask.redirect(target)
+
+    if not repositories.ProjectRepository().get_by_id(project_id):
+        flask.flash(f"Project '{project_id}' not found.", "danger")
+        return flask.redirect(target)
+
+    project, error = _parse_project_form(project_id)
+    if project is None:
+        flask.flash(error, "warning")
+        return flask.redirect(form_page)
+
+    repositories.ProjectRepository().save(project)
+    flask.flash(f"Project '{project.title}' updated.", "success")
+    return flask.redirect(target)
 
 
 @web_bp.post("/projects/<project_id>/delete")
