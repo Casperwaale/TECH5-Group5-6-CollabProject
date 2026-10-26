@@ -110,22 +110,28 @@ If a source fixes the item, it is a requirement: cite the source. If sources con
 
 ### Q1. Approval of the assignment method
 The brief requires instructor approval before the method becomes the baseline (§7). Send the D1 proposal, and mention R13 (mandatory skills per project) so the instructor sees the full model.
-- **Approved by / date:**
-
+- **Approved by / date:** Professor Julio Goez, 2026-10-22. Approved ILP with Pyomo + highspy, including R13
 ---
 
 ## 3. Team B decisions
 
-### D1. Assignment method and library — library DECIDED, method awaiting Q1
+### D1. Assignment method and library — DECIDED
 - **Method:** integer linear programming (ILP). One binary variable per student–project pair. The objective is a weighted sum set by the strategy.
 - **Why:** it represents every hard constraint exactly, and it can *prove* when no further distinct alternative exists (R5).
 - **Library: Pyomo + highspy** (HiGHS solver). Casper proposed it (2026-10-16), Victor agreed (2026-10-19). We both used Pyomo with `appsi_highs` in TECH4. Both packages must be added to `requirements.txt`. The starter docs mention PuLP/CBC only as an example.
 
-### D14. Arguments of `calculate_cost_or_utility` — PROPOSED
+### D14. Arguments of `calculate_cost_or_utility` — DECIDED
 - **Decision:** the abstract method in `AssignmentStrategy` takes `(data, s, p)` instead of the starter's `(student, project, max_preferences)`. It still returns the objective coefficient of `x[s,p]`, so the strategy pattern of `docs/architecture.md` §4.1 is unchanged.
 - **Why:** the coefficients need r, φ and σ, which `prepare_data` already computes, plus the cohort size n (tie-break weights ε) and the project count m (penalty rank m + 1, R14). The starter arguments carry neither n nor m, and `max_preferences` (most projects any student ranked) is not m.
 - **Impact:** none outside `app/engine/solvers.py`. Checked on every branch and open pull request (2026-10-22): no code, template or test calls the method; `test_assignment_strategy_abc` still holds because the method stays abstract.
-- **Proposed by:** Victor (2026-10-22). Confirm in the review of the step 4 pull request.
+- **Proposed by:** Victor (2026-10-22). Confirmed by Casper (2026-10-26) after the solver pull requests (#10-13) were merged. 
+
+---
+
+### D15. Indicator conventions in `metrics.py` — DECIDED
+- **Variance:** `rank_variance` is the population variance, $\frac{1}{n}\sum_s (r_s - \bar{r})^2$, because we describe the whole cohort, not a sample.
+- **Rounding:** means, variance and Gini are rounded to 4 decimals; percentages to 1 decimal. Comparison deltas are rounded to 4 decimals, so 0.95 − 0.55 gives 0.4, not 0.39999.
+- **Proposed by:** Casper (2026-10-26), in the indicators pull request.
 
 ---
 
@@ -135,3 +141,6 @@ The brief requires instructor approval before the method becomes the baseline (�
 |---|---|---|
 | 2026-10-19 | D1 library: Pyomo + highspy | Casper, Victor |
 | 2026-10-22 | D14 proposed: strategy coefficient reads from `prepare_data` | Victor |
+| 2026-10-22 | Q1: method approved by instructor | Professor Julio Goez |
+| 2026-10-26 | D14 confirmed | Casper |
+| 2026-10-26 | D15: population variance, rounding | Casper |
