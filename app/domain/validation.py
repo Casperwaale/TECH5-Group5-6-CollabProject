@@ -112,6 +112,18 @@ def validate_cohort(
                 f"({project.max_capacity})."
             )
 
+        for req in project.requirements:
+            level = req.minimum_level
+            if (
+                not isinstance(level, int)
+                or isinstance(level, bool)
+                or not 1 <= level <= 5
+            ):
+                result.errors.append(
+                    f"Project '{project.id}' requires invalid level {level!r} "
+                    f"for skill '{req.skill_id}'; expected an integer from 1 to 5."
+                )
+
         total_min_capacity += project.min_capacity
         total_max_capacity += project.max_capacity
 
@@ -156,6 +168,16 @@ def validate_cohort(
                 )
             seen_preferred_projects.add(pref.project_id)
 
+            if (
+                not isinstance(pref.rank, int)
+                or isinstance(pref.rank, bool)
+                or pref.rank < 1
+            ):
+                result.errors.append(
+                    f"Student '{student.id}' has invalid rank {pref.rank!r} for "
+                    f"project '{pref.project_id}'; ranks start at 1."
+                )
+
             if pref.rank in seen_ranks:
                 result.errors.append(
                     f"Student '{student.id}' has duplicate rank {pref.rank}."
@@ -182,8 +204,19 @@ def validate_cohort(
     if fixed_assignments:
         fixed_student_counts: dict[str, int] = {}
         fixed_project_counts: dict[str, int] = {}
+        pair_counts: dict[tuple[str, str], int] = {}
 
         for fixed in fixed_assignments:
+            pair = (fixed.student_id, fixed.project_id)
+            pair_counts[pair] = pair_counts.get(pair, 0) + 1
+            if pair_counts[pair] > 1:
+                # The same lock listed again: report it once, count it once
+                if pair_counts[pair] == 2:
+                    result.errors.append(
+                        f"Duplicate fixed assignment: student '{fixed.student_id}' "
+                        f"is locked to project '{fixed.project_id}' more than once."
+                    )
+                continue
             if fixed.student_id not in student_ids:
                 result.errors.append(
                     f"Fixed assignment references unknown student "

@@ -178,3 +178,66 @@ def test_duplicate_preferred_project_is_invalid() -> None:
     assert any("multiple preferences for project 'P1'" in error
                for error in result.errors)
 
+
+
+def test_invalid_requirement_levels_are_rejected() -> None:
+    """A project's required level must be an integer between one and five (R7)."""
+    for bad_level in (0, 6, -1, 2.5, True):
+        project = models.Project(
+            id="P1",
+            title="Project 1",
+            requirements=[
+                models.ProjectRequirement("P1", "python", minimum_level=bad_level)
+            ],
+        )
+        result = validation.validate_cohort([], [project])
+        assert not result.is_valid
+        assert any("requires invalid level" in error for error in result.errors)
+
+
+def test_valid_requirement_levels_are_accepted() -> None:
+    """Required levels one to five raise no level error."""
+    for level in range(1, 6):
+        project = models.Project(
+            id="P1",
+            title="Project 1",
+            requirements=[models.ProjectRequirement("P1", "python", minimum_level=level)],
+        )
+        student = models.Student(
+            id="S01",
+            display_name="Student 1",
+            preferences=[models.Preference("S01", "P1", 1)],
+        )
+        result = validation.validate_cohort([student], [project])
+        assert not any("requires invalid level" in error for error in result.errors)
+
+
+def test_ranks_below_one_are_rejected() -> None:
+    """Preference ranks start at one (R12, schema CHECK rank >= 1)."""
+    projects = [models.Project(id="P1", title="Project 1")]
+    for bad_rank in (0, -2):
+        student = models.Student(
+            id="S01",
+            display_name="Student 1",
+            preferences=[models.Preference("S01", "P1", bad_rank)],
+        )
+        result = validation.validate_cohort([student], projects)
+        assert not result.is_valid
+        assert any("invalid rank" in error for error in result.errors)
+
+
+def test_same_lock_twice_is_reported_as_duplicate() -> None:
+    """The same lock listed twice is a duplicate, not a contradiction."""
+    projects = [models.Project(id="P1", title="Project 1", max_capacity=1)]
+    student = models.Student(
+        id="S01",
+        display_name="Student 1",
+        preferences=[models.Preference("S01", "P1", 1)],
+    )
+    lock = models.FixedAssignment(student_id="S01", project_id="P1")
+    result = validation.validate_cohort([student], projects, [], [lock, lock])
+    assert not result.is_valid
+    assert any("Duplicate fixed assignment" in error for error in result.errors)
+    assert not any("Contradictory" in error for error in result.errors)
+    # Counted once, so a one-seat project is not reported as over capacity
+    assert result.is_feasible
