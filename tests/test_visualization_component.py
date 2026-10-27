@@ -2,8 +2,6 @@
 
 import pathlib
 
-import pytest
-
 from app import create_app
 from app.domain import models
 from app.persistence import repositories
@@ -172,10 +170,6 @@ def test_create_student_preference_validation(
     assert saved.preferences[0].project_id == "P1"
 
 
-@pytest.mark.xfail(
-    raises=NotImplementedError,
-    reason="TODO (Team A): Implement skill CRUD",
-)
 def test_skills_crud_workflow(tmp_path: pathlib.Path) -> None:
     """Verifies skill addition workflow (Team A implementation)."""
     db_file = tmp_path / "test_skill.db"
@@ -193,10 +187,6 @@ def test_skills_crud_workflow(tmp_path: pathlib.Path) -> None:
     )
 
 
-@pytest.mark.xfail(
-    raises=NotImplementedError,
-    reason="TODO (Team A): Implement project CRUD",
-)
 def test_projects_crud_workflow(tmp_path: pathlib.Path) -> None:
     """Verifies project addition workflow (Team A implementation)."""
     db_file = tmp_path / "test_proj.db"
@@ -216,10 +206,6 @@ def test_projects_crud_workflow(tmp_path: pathlib.Path) -> None:
     )
 
 
-@pytest.mark.xfail(
-    raises=NotImplementedError,
-    reason="TODO (Team A): Implement comparison controller & view",
-)
 def test_compare_solutions_view(tmp_path: pathlib.Path) -> None:
     """Verifies solution comparison controller (Team A implementation)."""
     db_file = tmp_path / "test_comp.db"
