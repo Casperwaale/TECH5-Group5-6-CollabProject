@@ -82,12 +82,19 @@ def prepare_data(
     min_capacity = {p: project_by_id[p].min_capacity for p in project_ids}    # l_p
     max_capacity = {p: project_by_id[p].max_capacity for p in project_ids}    # u_p
 
-    # r_{s,p}: stated rank, or penalty rank m + 1 for an unranked project (eq. 1, R14)
-    rank = {
-        (s, p): student_by_id[s].get_preference_rank(p)
-        if student_by_id[s].get_preference_rank(p) is not None else m + 1
-        for s in student_ids for p in project_ids
-    }
+    # r_{s,p}: position of p in student s's own ranking (1 = first choice), or penalty
+    # rank m + 1 for an unranked project (eq. 1, R14). Positions rather than the stored
+    # numbers, so a gap left by a deleted project (ranks 1, 3, 4) still gives 1, 2, 3
+    # and a ranked project never costs more than an unranked one (D16)
+    rank = {}
+    for s in student_ids:
+        position = {}
+        count = 0
+        for stated_rank, p in sorted([(pref.rank, pref.project_id) for pref in student_by_id[s].preferences]):
+            count = count + 1
+            position[p] = count
+        for p in project_ids:
+            rank[s, p] = position[p] if p in position else m + 1
 
     # phi_{s,p}: preference score, 1 for a first choice, 0 for an unranked project (eq. 2)
     preference_score = {
@@ -614,18 +621,14 @@ class AssignmentEngine(contract.AssignmentEngineContract):
         )
         run.diagnostics["notes"] = request.notes
 
-        # 1. Validate before solving: broken or provably infeasible input stops the run
+        # 1. Validate before solving: broken or provably infeasible input stops the run.
+        #    Broken input is reported first: an infeasibility found in broken data means little
         outcome = self.validate_inputs(request)
         run.diagnostics["warnings"] = outcome.warnings
-        if not outcome.is_feasible:
-            run.status = contract.RunStatus.INFEASIBLE.value
-            run.diagnostics["message"] = "The input cannot satisfy every hard constraint."
-            run.diagnostics["reasons"] = outcome.infeasibility_reasons
-            run.diagnostics["errors"] = outcome.errors
-            self.run_repo.save_run(run)
-            return run
-
-        errors = list(outcome.errors)
+        errors = []
+        for error in outcome.errors:
+            if error not in outcome.infeasibility_reasons:
+                errors.append(error)
         if request.strategy_key not in self.strategies:
             errors.append(
                 f"Unknown strategy '{request.strategy_key}'; "
@@ -633,10 +636,18 @@ class AssignmentEngine(contract.AssignmentEngineContract):
             )
         if request.max_alternatives < 1:
             errors.append("At least one alternative must be requested.")
-        if not outcome.is_valid or errors:
+        if len(errors) > 0:
             run.status = contract.RunStatus.INVALID_INPUT.value
             run.diagnostics["message"] = "The input was rejected before solving."
-            run.diagnostics["errors"] = errors
+            run.diagnostics["errors"] = errors + outcome.infeasibility_reasons
+            self.run_repo.save_run(run)
+            return run
+
+        if not outcome.is_feasible:
+            run.status = contract.RunStatus.INFEASIBLE.value
+            run.diagnostics["message"] = "The input cannot satisfy every hard constraint."
+            run.diagnostics["reasons"] = outcome.infeasibility_reasons
+            run.diagnostics["errors"] = outcome.errors
             self.run_repo.save_run(run)
             return run
 
@@ -709,15 +720,38 @@ class AssignmentEngine(contract.AssignmentEngineContract):
         """Stores the request's skills, projects, students and fixed assignments.
 
         Uses the run repository's database, so the run and its entities are
-        saved in the same place.
+        saved in the same place. A skill that a student or project refers to
+        but that is in neither the request's catalogue nor the database is
+        stored under its own identifier first: validation only warns about
+        unknown skills (R17), and the database needs every referenced skill
+        to exist (D16). Existing skills are never overwritten.
 
         Args:
             request: The run request containing students, projects, etc.
         """
         db = self.run_repo.db
+        skill_repo = repositories.SkillRepository(db)
+        catalogue_ids = []
         if request.skills is not None:
             for skill in request.skills:
-                repositories.SkillRepository(db).save(skill)
+                skill_repo.save(skill)
+                catalogue_ids.append(skill.id)
+
+        referenced_ids = []
+        for student in request.students:
+            for skill_id in student.skills:
+                referenced_ids.append(skill_id)
+        for project in request.projects:
+            for req in project.requirements:
+                referenced_ids.append(req.skill_id)
+        for skill_id in sorted(set(referenced_ids)):
+            if skill_id not in catalogue_ids and skill_repo.get_by_id(skill_id) is None:
+                skill_repo.save(models.Skill(
+                    id=skill_id,
+                    name=skill_id,
+                    description="Added automatically: referenced in the cohort but missing from the skills catalogue.",
+                ))
+
         for project in request.projects:
             repositories.ProjectRepository(db).save(project)
         for student in request.students:
