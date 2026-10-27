@@ -388,16 +388,107 @@ def new_project_form() -> str:
     )
 
 
+def _parse_project_form(
+    project_id: str,
+) -> tuple[models.Project | None, str]:
+    """Reads and validates the project form fields.
+
+    Shared by project creation and project editing.
+
+    Args:
+        project_id: Identifier of the project being created or edited.
+
+    Returns:
+        A tuple of (project, error_message). On success the error message
+        is empty; on invalid input the project is None.
+    """
+    form = flask.request.form
+    title = form.get("title", "").strip()
+    description = form.get("description", "").strip()
+    if not title:
+        return None, "Project title is required."
+
+    min_text = form.get("min_capacity", "").strip() or "0"
+    max_text = form.get("max_capacity", "").strip()
+    try:
+        min_capacity = int(min_text)
+        max_capacity = int(max_text)
+    except ValueError:
+        return None, "Capacities must be whole numbers."
+
+    if min_capacity < 0 or max_capacity < 1 or min_capacity > max_capacity:
+        return None, (
+            "Invalid capacity: minimum must be 0 or more, maximum at least 1, "
+            "and minimum cannot be larger than maximum."
+        )
+
+    requirements = []
+    for skill in repositories.SkillRepository().list_all():
+        level_text = form.get(f"req_level_{skill.id}", "").strip() or "0"
+        is_mandatory = form.get(f"req_mand_{skill.id}") == "1"
+
+        try:
+            level = int(level_text)
+        except ValueError:
+            return None, f"Level for '{skill.name}' must be a whole number."
+
+        if level < 0 or level > 5:
+            return None, f"Level for '{skill.name}' must be between 0 and 5."
+
+        if level == 0:
+            if is_mandatory:
+                return None, (
+                    f"'{skill.name}' is marked mandatory but has level 0. "
+                    "Choose a level from 1 to 5."
+                )
+            continue
+
+        requirements.append(
+            models.ProjectRequirement(
+                project_id=project_id,
+                skill_id=skill.id,
+                minimum_level=level,
+                is_mandatory=is_mandatory,
+            )
+        )
+
+    project = models.Project(
+        id=project_id,
+        title=title,
+        description=description,
+        min_capacity=min_capacity,
+        max_capacity=max_capacity,
+        requirements=requirements,
+    )
+    return project, ""
+
+
 @web_bp.post("/projects/new")
 def create_project() -> flask.Response:
-    """Processes creation of a project.
+    """Processes creation of a project."""
+    target = flask.url_for("visualization_web.list_projects")
+    form_page = flask.url_for("visualization_web.new_project_form")
+    if not auth.can_edit_cohort_data():
+        flask.flash("Permission denied for current role.", "danger")
+        return flask.redirect(target)
 
-    Raises:
-        NotImplementedError: To be implemented by Team A.
-    """
-    raise NotImplementedError(
-        "TODO (Team A): Implement project creation and requirement parsing"
-    )
+    project_id = flask.request.form.get("id", "").strip()
+    if not project_id:
+        flask.flash("Project ID is required.", "warning")
+        return flask.redirect(form_page)
+
+    if repositories.ProjectRepository().get_by_id(project_id):
+        flask.flash(f"Project '{project_id}' already exists.", "danger")
+        return flask.redirect(form_page)
+
+    project, error = _parse_project_form(project_id)
+    if project is None:
+        flask.flash(error, "warning")
+        return flask.redirect(form_page)
+
+    repositories.ProjectRepository().save(project)
+    flask.flash(f"Project '{project.title}' created successfully.", "success")
+    return flask.redirect(target)
 
 
 @web_bp.get("/projects/<project_id>/edit")
@@ -416,26 +507,47 @@ def edit_project_form(project_id: str) -> Any:
 
 @web_bp.post("/projects/<project_id>/edit")
 def update_project(project_id: str) -> flask.Response:
-    """Updates an existing project entity.
-
-    Raises:
-        NotImplementedError: To be implemented by Team A.
-    """
-    raise NotImplementedError(
-        "TODO (Team A): Implement project update and requirement parsing"
+    """Updates an existing project entity."""
+    target = flask.url_for("visualization_web.list_projects")
+    form_page = flask.url_for(
+        "visualization_web.edit_project_form", project_id=project_id
     )
+    if not auth.can_edit_cohort_data():
+        flask.flash("Permission denied for current role.", "danger")
+        return flask.redirect(target)
+
+    if not repositories.ProjectRepository().get_by_id(project_id):
+        flask.flash(f"Project '{project_id}' not found.", "danger")
+        return flask.redirect(target)
+
+    project, error = _parse_project_form(project_id)
+    if project is None:
+        flask.flash(error, "warning")
+        return flask.redirect(form_page)
+
+    repositories.ProjectRepository().save(project)
+    flask.flash(f"Project '{project.title}' updated.", "success")
+    return flask.redirect(target)
 
 
 @web_bp.post("/projects/<project_id>/delete")
 def delete_project(project_id: str) -> flask.Response:
-    """Deletes a project.
+    """Deletes a project and the records that depend on it."""
+    target = flask.url_for("visualization_web.list_projects")
+    if not auth.can_edit_cohort_data():
+        flask.flash("Permission denied for current role.", "danger")
+        return flask.redirect(target)
 
-    Raises:
-        NotImplementedError: To be implemented by Team A.
-    """
-    raise NotImplementedError(
-        "TODO (Team A): Implement project deletion"
-    )
+    if repositories.ProjectRepository().delete(project_id):
+        flask.flash(
+            f"Project '{project_id}' removed. Its skill requirements, student "
+            "preferences, fixed assignments and saved assignments for it were "
+            "removed too.",
+            "info",
+        )
+    else:
+        flask.flash(f"Project '{project_id}' not found.", "warning")
+    return flask.redirect(target)
 
 
 # -----------------------------------------------------------------------------
