@@ -84,7 +84,7 @@ If a source fixes the item, it is a requirement: cite the source. If sources con
 - Students sharing the same preferences ("tied preferences across students", brief §9) are valid and must solve (edge case 2).
 
 ### R13. Mandatory skills apply per project (was D2 / Q2)
-- Each mandatory requirement must be met by **at least one** student assigned to the project: $\sum_{s \in Q_{p,k}} x_{s,p} \ge 1$, where $Q_{p,k}$ is the set of students qualified for mandatory skill $k$ on project $p$. (`docs/analytical_note_template.md` §2.4: "guaranteeing that any mandatory project requirement is satisfied by at least one assigned student")
+- Each mandatory requirement must be met by **at least one** student assigned to the project: $\sum_{s \in Q_{p,t}} x_{s,p} \ge 1$, where $Q_{p,t}$ is the set of students qualified for mandatory skill $t$ on project $p$ (notation of `docs/model/ilp_formulation.tex`). (`docs/analytical_note_template.md` §2.4: "guaranteeing that any mandatory project requirement is satisfied by at least one assigned student")
 - Consistent with brief §4 ("may leave another project without appropriate skills") and with validation's cohort-level check (edge case 12).
 - If a project with a mandatory requirement may stay empty ($l_p = 0$), the constraint applies only when the project is used.
 
@@ -132,6 +132,12 @@ The brief requires instructor approval before the method becomes the baseline (�
 - **Rounding:** means, variance and Gini are rounded to 4 decimals; percentages to 1 decimal. Comparison deltas are rounded to 4 decimals, so 0.95 − 0.55 gives 0.4, not 0.39999.
 - **Proposed by:** Casper (2026-10-26), in the indicators pull request.
 
+### D16. Robust handling of rank gaps and uncatalogued skills — DECIDED
+- **Ranks by position:** the solver uses each student's *position* in their own list (1st, 2nd, 3rd …) as $r_{s,p}$, not the stored rank number. Deleting a project leaves gaps (ranks 1, 3, 4 with three projects left); with stored numbers a ranked project could cost more than an unranked one ($m + 1$), and the solver and `metrics.py` disagreed on worst rank, mean rank and unranked count. For gap-free lists, which the input form always creates, nothing changes. The stored `preference_rank` is the same position.
+- **Uncatalogued skills:** a skill that a student or project refers to but that is missing from the catalogue is still only a warning (R17). Before saving the cohort, the engine stores such a skill under its own identifier, because the database requires every referenced skill to exist; without this the run crashed (AGENTS.md rule 4). Existing catalogue entries are never overwritten.
+- **Invalid before infeasible:** when input is both invalid and infeasible (e.g. an empty project catalogue), the run is `INVALID_INPUT`, so the user fixes the data first.
+- **Decided by:** Victor (2026-10-27), with authority delegated for the Week 2 deadline; found by a cross-check of `solvers.py` against `metrics.py` and a bad-input sweep of `execute_run`.
+
 ---
 
 ## Log
@@ -143,3 +149,4 @@ The brief requires instructor approval before the method becomes the baseline (�
 | 2026-10-22 | Q1: method approved by instructor | Professor Julio Goez |
 | 2026-10-26 | D14 confirmed | Casper |
 | 2026-10-26 | D15: population variance, rounding | Casper |
+| 2026-10-27 | D16: ranks by position, uncatalogued skills stored, invalid before infeasible | Victor |
