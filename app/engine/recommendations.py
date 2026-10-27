@@ -167,7 +167,7 @@ def generate_recommendations(
             criteria_used=[
                 "Rank Gini coefficient (equality of outcome distribution)",
                 "Rank variance across students",
-                "Harmonized score between preference rank and skill fit",
+                "Mean preference rank (final tie-break)",
             ],
             evidence=[
                 f"Lowest rank disparity (Gini coefficient: "
