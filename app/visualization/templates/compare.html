@@ -14,6 +14,12 @@
   </div>
 
   <div class="card-body">
+    {% if not all_solutions %}
+      <div class="alert alert-info" style="margin-bottom: 1.5rem;">
+        No solutions to compare yet. Load a scenario and launch an optimization run on the
+        <a href="{{ url_for('visualization_web.dashboard') }}">dashboard</a> first.
+      </div>
+    {% else %}
     <!-- Solution Selector Form -->
     <form action="{{ url_for('visualization_web.compare_solutions') }}" method="GET" style="display: flex; gap: 1rem; align-items: flex-end; flex-wrap: wrap; margin-bottom: 1.5rem; background: #f8fafc; border: 1px solid var(--border-color); padding: 1rem; border-radius: var(--radius-md);">
       <div style="flex: 1; min-width: 250px;">
@@ -42,14 +48,7 @@
         Compare Allocations &rarr;
       </button>
     </form>
-
-    <!-- TODO (Team A): Implement Side-by-Side Solution Comparison -->
-    <div class="alert alert-info" style="margin-bottom: 1.5rem;">
-      <strong>Team A Starter Carcass:</strong>
-      Implement the comparative analysis view below using the <code>RunComparison</code> DTO.
-      Display comparative delta metrics (skill fit, preference rank, Gini), trade-off findings,
-      and the table of changed student allocations between Solution A and Solution B.
-    </div>
+    {% endif %}
 
     {% if comparison and sol_a and sol_b %}
       <!-- Comparative KPI Deltas -->
@@ -91,16 +90,31 @@
           </span>
           <span class="kpi-sub">{{ comparison.rank_improved_count }} improved, {{ comparison.rank_worsened_count }} worsened</span>
         </div>
+
+        {% set gini_delta = comparison.delta_metrics.get('gini_delta') %}
+        {% if gini_delta is not none %}
+          <div class="kpi-card">
+            <span class="kpi-label">&Delta; Rank Gini</span>
+            <span class="kpi-value {% if gini_delta < 0 %}text-success{% elif gini_delta > 0 %}text-danger{% endif %}">
+              {% if gini_delta > 0 %}+{% endif %}{{ gini_delta }}
+            </span>
+            <span class="kpi-sub">Lower means ranks are shared more equally</span>
+          </div>
+        {% endif %}
       </div>
 
       <!-- Trade-off Analytical Summary -->
       <div class="alert alert-info" style="margin-bottom: 1.5rem;">
         <strong>Trade-off Findings:</strong>
-        <ul style="margin-left: 1.5rem; margin-top: 0.35rem;">
-          {% for t in comparison.trade_off_summary %}
-            <li>{{ t }}</li>
-          {% endfor %}
-        </ul>
+        {% if comparison.trade_off_summary %}
+          <ul style="margin-left: 1.5rem; margin-top: 0.35rem;">
+            {% for t in comparison.trade_off_summary %}
+              <li>{{ t }}</li>
+            {% endfor %}
+          </ul>
+        {% else %}
+          <p style="margin-top: 0.35rem;">The engine reported no trade-off findings for this pair.</p>
+        {% endif %}
       </div>
 
       <!-- Changed Students Table -->
@@ -124,17 +138,29 @@
               <tr>
                 <td><strong>{{ c.student_name or c.student_id }}</strong></td>
                 <td>{{ c.project_a_title or c.project_a_id }}</td>
-                <td>Choice #{{ c.rank_a }}</td>
+                <td>{% if c.rank_a is not none %}Choice #{{ c.rank_a }}{% else %}<em>Outside preferences</em>{% endif %}</td>
                 <td>{{ c.project_b_title or c.project_b_id }}</td>
-                <td>Choice #{{ c.rank_b }}</td>
+                <td>{% if c.rank_b is not none %}Choice #{{ c.rank_b }}{% else %}<em>Outside preferences</em>{% endif %}</td>
                 <td>
-                  {% if c.rank_delta < 0 %}
-                    <span class="badge badge-success">&#9650; {{ c.rank_delta|abs }} ranks better</span>
-                  {% elif c.rank_delta > 0 %}
-                    <span class="badge badge-danger">&#9660; {{ c.rank_delta }} ranks worse</span>
+                  {% if c.rank_a is none and c.rank_b is none %}
+                    <span class="badge badge-secondary">Outside preferences in both</span>
+                  {% elif c.rank_b is none %}
+                    <span class="badge badge-danger">&#9660; Now outside preferences</span>
+                  {% elif c.rank_a is none %}
+                    <span class="badge badge-success">&#9650; Now within preferences</span>
+                  {% elif c.rank_b < c.rank_a %}
+                    <span class="badge badge-success">&#9650; {{ c.rank_a - c.rank_b }} rank{{ '' if c.rank_a - c.rank_b == 1 else 's' }} better</span>
+                  {% elif c.rank_b > c.rank_a %}
+                    <span class="badge badge-danger">&#9660; {{ c.rank_b - c.rank_a }} rank{{ '' if c.rank_b - c.rank_a == 1 else 's' }} worse</span>
                   {% else %}
                     <span class="badge badge-secondary">Lateral move</span>
                   {% endif %}
+                </td>
+              </tr>
+            {% else %}
+              <tr>
+                <td colspan="6" style="text-align: center; color: var(--text-muted); padding: 1.5rem;">
+                  No student changes project between these two solutions.
                 </td>
               </tr>
             {% endfor %}
@@ -145,7 +171,7 @@
       <p style="color: var(--text-muted); text-align: center; padding: 2rem;">
         Comparison data not available for the selected solutions.
       </p>
-    {% else %}
+    {% elif all_solutions %}
       <p style="color: var(--text-muted); text-align: center; padding: 2rem;">
         Select two solutions above to view comparative trade-offs.
       </p>

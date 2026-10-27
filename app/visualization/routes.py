@@ -795,15 +795,128 @@ def clear_solutions() -> flask.Response:
 # -----------------------------------------------------------------------------
 
 
+def _add_display_names(comparison: models.RunComparison) -> None:
+    """Fills student names and project titles into the changed allocations.
+
+    The engine returns identifiers in the name and title fields, so names
+    are looked up in the repositories. Unknown identifiers are left as is.
+
+    Args:
+        comparison: Comparison whose changed_assignments are updated in place.
+    """
+    students = {
+        s.id: s.display_name
+        for s in repositories.StudentRepository().list_all()
+    }
+    projects = {
+        p.id: p.title for p in repositories.ProjectRepository().list_all()
+    }
+    for row in comparison.changed_assignments:
+        student_id = row.get("student_id", "")
+        row["student_name"] = students.get(
+            student_id, row.get("student_name") or student_id
+        )
+        for side in ("a", "b"):
+            project_id = row.get(f"project_{side}_id", "")
+            row[f"project_{side}_title"] = projects.get(
+                project_id, row.get(f"project_{side}_title") or project_id
+            )
+
+
+def _default_partner(
+    run_repo: repositories.RunRepository, solution: models.Solution
+) -> models.Solution | None:
+    """Finds another solution from the same run to compare against.
+
+    Args:
+        run_repo: Repository used to load the run.
+        solution: The solution the user picked.
+
+    Returns:
+        The first other alternative of the same run, or None if the run
+        produced only one solution.
+    """
+    run = run_repo.get_run(solution.run_id)
+    if run is None:
+        return None
+    for other in run.solutions:
+        if other.id != solution.id:
+            return run_repo.get_solution(other.id)
+    return None
+
+
 @web_bp.get("/compare")
 def compare_solutions() -> Any:
-    """Renders side-by-side comparative analysis of two solutions.
+    """Renders a side-by-side comparison of two solutions.
 
-    Raises:
-        NotImplementedError: To be implemented by Team A.
+    Query parameters `sol1` and `sol2` select solutions A and B. With only
+    one of them, the other alternative of the same run is used. With
+    neither, the first two alternatives of the latest run are compared.
+    Missing or unknown solutions produce a message instead of an error.
     """
-    raise NotImplementedError(
-        "TODO (Team A): Implement side-by-side solution comparison controller"
+    run_repo = repositories.RunRepository()
+    all_solutions = [
+        s for run in run_repo.list_runs(limit=10) for s in run.solutions
+    ]
+
+    sol1 = flask.request.args.get("sol1", "").strip()
+    sol2 = flask.request.args.get("sol2", "").strip()
+    sol_a = run_repo.get_solution(sol1) if sol1 else None
+    sol_b = run_repo.get_solution(sol2) if sol2 else None
+
+    missing = [
+        s for s, found in ((sol1, sol_a), (sol2, sol_b)) if s and not found
+    ]
+    if missing:
+        flask.flash(
+            f"Solution(s) {', '.join(m[:8] for m in missing)} could not be "
+            "found; they may have been cleared. Pick two solutions from the "
+            "lists below.",
+            "warning",
+        )
+        sol_a = sol_b = None
+    elif not sol1 and not sol2 and all_solutions:
+        latest = all_solutions[0]
+        sol_a = run_repo.get_solution(latest.id)
+    elif sol_b and not sol_a:
+        sol_a, sol_b = sol_b, None
+
+    if sol_a and not sol_b and not missing:
+        sol_b = _default_partner(run_repo, sol_a)
+        if sol_b is None:
+            flask.flash(
+                f"Run {sol_a.run_id[:8]} produced only one feasible solution, "
+                "so there is no alternative from that run to compare it with.",
+                "info",
+            )
+
+    comparison = None
+    if sol_a and sol_b:
+        if sol_a.id == sol_b.id:
+            flask.flash(
+                "Solution A and Solution B are the same solution.", "info"
+            )
+        elif sol_a.run_id != sol_b.run_id:
+            flask.flash(
+                "These solutions come from different runs, which may have "
+                "used different cohort data, locks or settings. Differences "
+                "can come from those changes, not only from the method.",
+                "warning",
+            )
+        engine: contract.AssignmentEngineContract = solvers.AssignmentEngine()
+        try:
+            comparison = engine.compare_solutions(sol_a.id, sol_b.id)
+        except KeyError:
+            flask.flash("One of the solutions could not be loaded.", "danger")
+        else:
+            _add_display_names(comparison)
+
+    return flask.render_template(
+        "compare.html",
+        all_solutions=all_solutions,
+        sol_a=sol_a,
+        sol_b=sol_b,
+        comparison=comparison,
     )
 
 
