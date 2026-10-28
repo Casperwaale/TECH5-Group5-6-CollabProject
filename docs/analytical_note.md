@@ -328,30 +328,20 @@ with unranked projects at rank $m + 1$ (R14). The code reads $m$ from the per-pr
 
 *In accordance with Section 9 of the specification, recommendations must separate calculated evidence from advice across distinct policy priorities.*
 
-`generate_recommendations` in `app/engine/recommendations.py` produces one recommendation per policy priority from the feasible alternatives of a single run. Each recommendation has three parts that the recommendations page shows separately: the criteria used, the calculated evidence (values read from the indicators in §3) and the advice (a sentence on when to adopt the solution). The evidence is computed; the advice is a normative statement written by the team, and the page states that the final decision rests with the programme committee.
-
-Rules common to all three priorities:
-- **Choice set:** only the alternatives of the selected run are compared. A recommendation is the best of these alternatives under the stated rule, not a new optimum over all possible allocations.
-- **Lexicographic order:** each rule compares the criteria in the listed order; a later criterion only breaks ties in the earlier ones.
-- **Ties:** if two alternatives are equal on every criterion, the one with the lowest alternative number is recommended, because the run lists its solutions in that order.
-- **Missing indicators:** a missing value counts as the worst possible value, so a solution without indicators is never preferred to one with them.
-- **Overlap:** the same alternative can be recommended under more than one priority. That means the trade-off between those priorities is small in this run.
-- **No solutions:** an infeasible run has no alternatives, so no recommendation is made; the run page reports the infeasibility instead (§6).
-
 ### 5.1 Policy Priority 1: Student Preference Maximization
-- **Quantitative Selection Criterion:** lexicographic minimization of the unranked count $c_{\text{unr}}$, then the mean rank $\bar{r}$, then the worst rank $r_{\max}$ (§3.3). No student placed outside their list is the first concern; the average and the worst-off student break ties.
-- **Calculated Evidence Reported:** $\bar{r}$, $c_{\text{unr}}$ and $r_{\max}$ of the recommended alternative, plus its mean skill fit $\bar{\sigma}$ (§3.2), so the cost in skill fit is visible next to the gain in preferences.
-- **Administrative Advice & Trade-Off Warning:** adopt this alternative when student satisfaction, morale and avoiding appeals come first. It can lower skill fit, because students go where they want rather than where their skills match; the reported $\bar{\sigma}$ and the comparison page (§4) show how much.
+- **Quantitative Selection Criterion:** [e.g., Lexicographic minimization of unranked count, then $\bar{r}$, then $r_{\max}$]
+- **Calculated Evidence Reported:** [List indicators presented to the user]
+- **Administrative Advice & Trade-Off Warning:** [When to apply and what compromises are made]
 
 ### 5.2 Policy Priority 2: Project Delivery & Technical Competence
-- **Quantitative Selection Criterion:** lexicographic maximization of the mean skill fit $\bar{\sigma}$, then minimization of the unmet soft requirements count (§3.2). Mandatory requirements are not part of the rule, because every feasible alternative already meets them (R13).
-- **Calculated Evidence Reported:** $\bar{\sigma}$ and the unmet soft requirements count of the recommended alternative, plus its mean rank $\bar{r}$, so the cost in student preferences is visible.
-- **Administrative Advice & Trade-Off Warning:** adopt this alternative when partner organizations or client deliverables demand strong technical and domain skills. Students may get lower-ranked projects; the reported $\bar{r}$ and the comparison page show how many students move and how far their ranks change.
+- **Quantitative Selection Criterion:** [e.g., Maximization of mean skill fit $\bar{\sigma}$]
+- **Calculated Evidence Reported:** [List indicators presented to the user]
+- **Administrative Advice & Trade-Off Warning:** [When to apply and what compromises are made]
 
 ### 5.3 Policy Priority 3: Balanced & Egalitarian Compromise
-- **Quantitative Selection Criterion:** lexicographic minimization of the rank Gini coefficient $G$, then the rank variance $\operatorname{Var}(r)$, then the mean rank $\bar{r}$ (§3.3, R9). There is no composite score and no weight. This rule is separate from the BALANCED solver strategy (§2.5): the strategy generates an alternative by minimizing the worst rank and then maximizing preference and skill fit, while this rule picks among all generated alternatives by how evenly ranks are spread. The criteria shown on the page were corrected in #28 to match the code.
-- **Calculated Evidence Reported:** $G$, $\operatorname{Var}(r)$, $\bar{\sigma}$ and $\bar{r}$ of the recommended alternative.
-- **Administrative Advice & Trade-Off Warning:** adopt this alternative when the committee wants a fair compromise that avoids extreme individual disadvantage. Equal is not the same as good: if every student got their third choice, $G$ would be $0$. $\bar{r}$ is therefore reported next to $G$, and it should be checked before this alternative is chosen over the one from §5.1.
+- **Quantitative Selection Criterion:** [e.g., Multi-objective composite score or Gini minimization]
+- **Calculated Evidence Reported:** [List indicators presented to the user]
+- **Administrative Advice & Trade-Off Warning:** [When to apply and what compromises are made]
 
 ---
 
