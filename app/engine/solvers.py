@@ -647,7 +647,6 @@ class AssignmentEngine(contract.AssignmentEngineContract):
             run.status = contract.RunStatus.INFEASIBLE.value
             run.diagnostics["message"] = "The input cannot satisfy every hard constraint."
             run.diagnostics["reasons"] = outcome.infeasibility_reasons
-            run.diagnostics["errors"] = outcome.errors
             self.run_repo.save_run(run)
             return run
 

@@ -175,3 +175,21 @@ def test_invalid_input_is_reported_before_infeasibility(tmp_path: pathlib.Path) 
     run = solvers.AssignmentEngine().run_assignment([s1], [], max_alternatives=1)
     assert run.status == "INVALID_INPUT"
     assert any("Project catalog cannot be empty" in e for e in run.diagnostics["errors"])
+
+
+def test_infeasible_run_lists_each_reason_once(tmp_path: pathlib.Path) -> None:
+    """An infeasible run stores its reasons once, not again as errors."""
+    app = create_app({"TESTING": True, "DATABASE_PATH": tmp_path / "infeasible.db"})
+    benchmark = demo_data.get_infeasible_scenario()
+    run = solvers.AssignmentEngine().run_assignment(
+        benchmark["students"], benchmark["projects"], skills=benchmark["skills"]
+    )
+    assert run.status == "INFEASIBLE"
+    assert len(run.diagnostics["reasons"]) >= 1
+    assert "errors" not in run.diagnostics
+
+    client = app.test_client()
+    client.post("/role", data={"role": "COORDINATOR"})
+    page = client.get(f"/runs/{run.id}").get_data(as_text=True)
+    for reason in run.diagnostics["reasons"]:
+        assert page.count(reason) == 1
