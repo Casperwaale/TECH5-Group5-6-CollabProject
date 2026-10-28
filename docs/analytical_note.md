@@ -380,6 +380,30 @@ The model rests on the assumptions below. Each one is tested; the edge-case numb
 
    Other conflicts only appear in combination, for example a lock that uses up the only qualified student, or minimum headcounts that leave too few qualified students for another project. These the solver proves infeasible. In both cases the run is saved with status `INFEASIBLE`, no solution, and a message with the reasons; no constraint is relaxed (R2, edge case 13). Input that is wrong rather than impossible (an unknown project ID, a student locked to two projects, invalid levels or ranks) is saved as `INVALID_INPUT` with the errors. When input is both invalid and infeasible, it is reported as invalid, so the user fixes the data first (D16).
 
+### 6.1 Summary of the 15 Edge Cases
+
+The table below summarises how the application handles the 15 edge cases specified in the assignment. Each case is covered by a test in `tests/test_edge_cases.py`.
+
+| Case | Edge case | Application behaviour | Test function |
+|---|---|---|---|
+| 1 | Incomplete preferences | Accepts the input with a warning and completes the assignment. Unranked projects receive a penalty rank. | `test_edge_case_1_incomplete_preferences` |
+| 2 | Identical preferences across students | Allows students to have the same preferences and produces an allocation that respects project capacities. | `test_edge_case_2_tied_preferences_across_students` |
+| 3 | Student without skills | Accepts the student and calculates a skill-fit score of 0 for a project with unmet non-mandatory skill requirements. | `test_edge_case_3_zero_skills_student` |
+| 4 | Project without skill requirements | Accepts the project and assigns a neutral skill-fit score of 1.0. | `test_edge_case_4_zero_requirements_project` |
+| 5 | Unknown project in preferences | Rejects the input and identifies the unknown project. | `test_edge_case_5_unknown_project_in_preferences` |
+| 6 | Unknown skill identifiers | Generates warnings identifying skills missing from the catalogue. | `test_edge_case_6_unknown_skill_in_entity` |
+| 7 | Insufficient total capacity | Detects that there are more students than available places and reports infeasibility. | `test_edge_case_7_aggregate_capacity_deficit` |
+| 8 | Excessive minimum capacity | Detects that the total minimum project capacity exceeds the number of students and reports infeasibility. | `test_edge_case_8_aggregate_min_capacity_excess` |
+| 9 | Minimum capacity exceeds maximum | Rejects the invalid project capacity settings. | `test_edge_case_9_capacity_inversion` |
+| 10 | Contradictory fixed assignments | Rejects a student being locked to two different projects. | `test_edge_case_10_conflicting_fixed_locks_same_student` |
+| 11 | Fixed assignments exceed capacity | Detects that too many students are locked to one project and reports infeasibility. | `test_edge_case_11_fixed_locks_exceeding_project_capacity` |
+| 12 | Unavailable mandatory skill | Detects that no student meets a project's mandatory requirement and reports infeasibility. | `test_edge_case_12_unavailable_mandatory_skill` |
+| 13 | Infeasible assignment | Returns `INFEASIBLE` and no solutions when the given cohort cannot be allocated. | `test_edge_case_13_no_feasible_solution` |
+| 14 | Only one feasible solution | Returns exactly one solution, even when more alternatives were requested. | `test_edge_case_14_single_feasible_solution` |
+| 15 | Duplicate alternatives | Uses no-good cuts to generate distinct assignments and stops when no further alternatives exist. | `test_edge_case_15_duplicate_avoidance_no_good_cuts` |
+
+Cases 5–12 mainly test input validation and feasibility checks, while cases 1–4 and 13–15 also demonstrate behaviour of the real assignment engine. The engine-based tests use a temporary SQLite database to ensure that they can run independently.
+
 ---
 
 ## 7. Limitations & Analytical Deficiencies
