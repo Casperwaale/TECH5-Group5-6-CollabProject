@@ -5,35 +5,35 @@
 **Authors (Team B - Assignment Engine):** Victor Goller, Casper Waale, Ole Kristian Skaar  
 **Authors (Team A - Visualization & Recommender):** Alex Solheim, Herman Kilde, Nils Lærum Harloff  
 **Course:** TECH5 Programming & Application Design, NHH Norwegian School of Economics  
-**Date:** [Submission Date]
-
----
-
-> [!IMPORTANT]
-> **Instructions for Students:**  
-> This document serves as the formal deliverable template for **Deliverable 6 (Analytical Note)** as defined in Section 15 and Section 6 of the TECH5 project specification (`projectTech5.tex`).  
->
-> Replace all bracketed text `[...]` with your team's mathematical formulation, indicator derivations, decision criteria, and critical reflections. Maintain rigorous mathematical notation and explain how your analytical design translates directly into your Python implementation in `app/engine/solvers.py` and `app/engine/metrics.py`.
+**Date:** 2 November 2026
 
 ---
 
 ## 1. Problem Definition & Mathematical Modeling Approach
 
 ### 1.1 Business Context & Decision Dilemma
-*Describe the real-world allocation challenge faced by academic coordinators. Discuss the inherent conflict between collective project quality (skill matching) and individual student satisfaction (preference rank).*
+Every semester a programme coordinator must place each student in exactly one project. Each project has a minimum and a maximum headcount, may need certain skills, and some students are already locked to a project by an administrative decision. Students rank the projects they want, and they report their skill levels. Assigning students to projects in this way is a well-studied problem in operations research; Rezaeinia et al. (2022) give the context for this course.
 
-[Provide a 1–2 paragraph summary of the problem, referencing Rezaeinia et al. (2022) for context without copying their proprietary algorithm.]
+The coordinator faces a real conflict. Giving every student a high-ranked project is good for satisfaction, but it can leave a project without the skills it needs. Filling every project with the best-qualified students is good for project quality, but it can send many students to projects they did not want, and it can hit a few students much harder than the rest. No single allocation is best on all of these at once. The application therefore does not hand down one answer: it computes several distinct alternatives, measures each one on feasibility, efficiency, fairness and capacity (§3), shows what changes between two of them (§4), and recommends one per policy priority while leaving the final decision to the coordinator (§5).
 
 ### 1.2 Chosen Assignment Methodology & Academic Justification
-*Identify your approved assignment methodology (e.g., Integer Linear Programming with PuLP/CBC, stable matching variant, heuristic search, or bipartite min-cost flow).*
+We use **integer linear programming (ILP)**, modelled in Pyomo and solved with the HiGHS solver (D1). The instructor approved the method on 22 October 2026 (Q1). All three strategies share one model (§2): one binary variable per student–project pair, the same hard constraints, and a different objective per strategy.
 
-[State your chosen method, explain why it is appropriate for this problem scale, and justify its computational feasibility within a single-process Python application.]
+**The main reason is that Team B already knows the method.** We learned to model and solve ILPs with Pyomo and HiGHS (`appsi_highs`) in TECH4 at NHH, and the code follows the same structure as there: sets and parameters as Python dictionaries, one constraint list per constraint family, and anything non-linear computed before the model is built. Every line can therefore be explained and checked by the team, which matters more to us than trying a method we have not used before. The starter docs mention PuLP/CBC only as an example.
+
+ILP also fits the problem itself, for three reasons:
+
+1. **Hard constraints hold exactly.** Headcounts, fixed assignments and mandatory skills are linear constraints, so every solution the solver returns respects them. Nothing is relaxed to get an answer: if they cannot all hold, the solver proves it and the run is reported as infeasible (R2).
+2. **Distinct alternatives can be proved.** A no-good cut (§2.4, constraint 5) forces at least one student to move. When the model with the cuts becomes infeasible, no further distinct allocation exists, so the application never shows a duplicate as a new alternative (R5).
+3. **The objectives are explicit.** Each strategy is a written objective function (§2.5), so the coordinator and the reviewers can see what each alternative optimises. A heuristic would give no guarantee of optimality, and a stable-matching method has no natural place for mandatory skills per project or for a skill-fit objective.
+
+**Computational feasibility.** The model has $n \cdot m$ assignment variables plus at most $m + 1$ helper variables. On the standard demonstration cohort ($n = 10$, $m = 4$) each strategy solves in a few hundredths of a second. On random test cohorts of 150 students and 20 projects each strategy took under 0.15 s, and on 300 students and 30 projects under 0.4 s (single thread, laptop). A full run of three alternatives is therefore well within what a single-process Flask application can do while the user waits.
 
 ---
 
 ## 2. Mathematical Formulation
 
-> **Draft by Team B for review.** One model with three objective functions: the sets, parameters, variables and constraints (§2.1–2.4) are shared by all strategies; only the objective (§2.5) changes. Rules tagged R1–R17 refer to the requirements in `docs/team_b_decisions.md`, each traced to the brief, the tests, the schema or the starter docs. The objective functions in §2.5 are our own design choice and are marked **proposal**.
+One model with three objective functions: the sets, parameters, variables and constraints (§2.1–2.4) are shared by all strategies; only the objective (§2.5) changes. Rules tagged R1–R17 refer to the requirements in `docs/team_b_decisions.md`, each traced to the brief, the tests, the schema or the starter docs; D-numbers are Team B's own decisions in the same file. The full formulation, with equation numbers that the code cites, is in `docs/model/ilp_formulation.tex`.
 
 ### 2.1 Index Sets & Dimensions
 - $S = \{s_1, \dots, s_n\}$: students in the cohort, $\lvert S \rvert = n$.
@@ -58,10 +58,12 @@ All sets are built in sorted identifier order, so the same input always produces
 $$
 r_{s,p} =
 \begin{cases}
-\text{stated rank of } p \text{ by } s, & \text{if } s \text{ ranked } p,\\
+\text{position of } p \text{ in the list of } s, & \text{if } s \text{ ranked } p,\\
 m + 1, & \text{otherwise.}
 \end{cases}
 $$
+
+The position is counted in order of stated rank: $1$ for the student's first choice, $2$ for the next, and so on. If a project is deleted after students ranked it, the gap in the stored ranks is skipped, so a ranked project never costs more than an unranked one (D16).
 
 - $\phi_{s,p} \in [0, 1]$: normalised preference score, $1$ for a first choice and $0$ for an unranked project:
 
@@ -133,7 +135,7 @@ Since $\lvert \Gamma^{(j)} \rvert = n$, at least one student must then move. If 
 
 **Ties (R16).** Each strategy has a secondary term with a small weight, so that among solutions equal on the main goal the one that is better on the other goal is chosen (`docs/testing_and_quality.md`, edge case 2). Any remaining exact tie is resolved by the fixed sorted model order and a single-threaded HiGHS run, so the same input gives the same result.
 
-- **Strategy 1: PREFERENCE (minimise total rank)** (proposal)
+- **Strategy 1: PREFERENCE (minimise total rank)**
 
 $$
 \min \; Z_{\text{pref}} = \sum_{s \in S} \sum_{p \in P} r_{s,p} \, x_{s,p} \;-\; \varepsilon_{\text{pref}} \sum_{s \in S} \sum_{p \in P} \sigma_{s,p} \, x_{s,p},
@@ -142,7 +144,7 @@ $$
 
 The rank sum is an integer, and the skill term is at most $n \, \varepsilon_{\text{pref}} < 1$, so it can only break ties: it never makes the rank sum worse. Minimising the rank sum equals minimising the mean rank $\bar{r}$ reported by the indicators.
 
-- **Strategy 2: SKILL_FIT (maximise total skill fit)** (proposal)
+- **Strategy 2: SKILL_FIT (maximise total skill fit)**
 
 $$
 \max \; Z_{\text{skill}} = \sum_{s \in S} \sum_{p \in P} \sigma_{s,p} \, x_{s,p} \;+\; \varepsilon_{\text{skill}} \sum_{s \in S} \sum_{p \in P} \phi_{s,p} \, x_{s,p},
@@ -151,7 +153,7 @@ $$
 
 The preference term is at most $10^{-3}$, so it breaks ties between solutions with (practically) equal skill fit. Unlike Strategy 1 this is not an exact guarantee, because skill-fit totals are not integers; we state this as a limitation.
 
-- **Strategy 3: BALANCED (protect the worst-off, then balance)** (proposal). Solved in two stages, so no weight between fairness and efficiency has to be tuned:
+- **Strategy 3: BALANCED (protect the worst-off, then balance)**. Solved in two stages, so no weight between fairness and efficiency has to be tuned:
 
   *Stage 1 (egalitarian):* minimise the worst assigned rank
 
@@ -168,7 +170,7 @@ $$
 
 Both terms lie in $[0, 1]$ per student, so $\lambda = 0.5$ weighs them equally. Stage 1 matches the strategy's label in the UI ("Egalitarian Fairness"): nobody gets a worse rank than necessary.
 
-**Open for Team B review:** the form of each objective, $\lambda = 0.5$, and whether BALANCED should use the two-stage form or a single weighted objective.
+The three objectives, $\lambda = 0.5$ and the two-stage form of BALANCED were reviewed and merged by Team B (pull request #10). In the code, each strategy returns the coefficient of $x_{s,p}$ through `calculate_cost_or_utility(data, s, p)` (D14).
 
 ### 2.6 Notation Summary
 Each symbol has exactly one meaning in this note.
@@ -345,18 +347,43 @@ with unranked projects at rank $m + 1$ (R14). The code reads $m$ from the per-pr
 
 ## 6. Assumptions, Boundary Conditions & Edge Cases
 
-Document all operational assumptions:
-1. **Student Submission Incompleteness:** How unranked projects are penalized.
-2. **Ties in Preferences:** How students with identical preference lists are handled.
-3. **Skill Levels:** Handling students with zero declared skills or projects with zero requirements.
-4. **Feasibility Boundaries:** Exact conditions under which the problem is proved mathematically infeasible.
+The model rests on the assumptions below. Each one is tested; the edge-case numbers refer to `tests/test_edge_cases.py` and `docs/testing_and_quality.md` §3.
+
+1. **Student Submission Incompleteness.** A student may rank fewer than three projects, or none; this gives a warning, not a rejection, because the student must still be placed (R6, edge case 1). An unranked project gets the penalty rank $r_{s,p} = m + 1$ and preference score $\phi_{s,p} = 0$, so any ranked project is better for the solver than any unranked one (R14). The same penalty is used in every rank indicator in §3, so the indicators measure what the solver optimised. In the saved result, the student's `preference_rank` stays empty and the student is counted in `unranked_count`, so the interface never shows a rank the student did not give.
+
+2. **Ties in Preferences.**
+   - *Across students:* many students may rank the same project first. This is valid and always solved (edge case 2). Among allocations equal on the strategy's main goal, the secondary term in the objective (§2.5) picks the one that is better on the other goal. Any remaining exact tie is resolved the same way every time, because the model is built in sorted identifier order and HiGHS runs on one thread (R16). The same input therefore gives the same alternatives, which keeps the demonstration reproducible.
+   - *Within one student's list:* two projects with the same rank, or the same project listed twice, are rejected before solving, because a rank must say which of two projects the student prefers (R12). A rank below 1 is also rejected.
+
+3. **Skill Levels.** Levels run from 1 to 5; a skill the student does not have counts as level 0. Any other stored level is rejected (R7).
+   - A student with no reported skills gets skill fit $\sigma_{s,p} = 0$ on every project with non-mandatory requirements and stays assignable (edge case 3). Such a student can never meet a mandatory requirement.
+   - A project with no non-mandatory requirements gives every student $\sigma_{s,p} = 1$, so skill fit does not distinguish between students there (edge case 4).
+   - Mandatory requirements are hard constraints and do not count towards skill fit, so they are not counted twice (R4).
+   - A mandatory requirement must be met by **at least one** student on the project, not by every student (R13). A project with minimum headcount 0 that stays empty does not need its mandatory skills.
+   - A skill missing from the catalogue gives a warning and is added to the catalogue under its own identifier when the cohort is saved (R17, D16).
+
+4. **Feasibility Boundaries.** The allocation is infeasible exactly when no assignment satisfies constraints 1–4 of §2.4 together. Validation finds the clear cases before solving:
+   - fewer seats than students: $\sum_p u_p < n$ (edge case 7);
+   - more minimum seats than students: $\sum_p l_p > n$ (edge case 8);
+   - more students locked to a project than it can take (fixed assignments above $u_p$);
+   - no student in the cohort meets a mandatory requirement of some project (edge case 12). This check is stricter than the model in one case, see §7.
+
+   Other conflicts only appear in combination, for example a lock that uses up the only qualified student, or minimum headcounts that leave too few qualified students for another project. These the solver proves infeasible. In both cases the run is saved with status `INFEASIBLE`, no solution, and a message with the reasons; no constraint is relaxed (R2, edge case 13). Input that is wrong rather than impossible (an unknown project ID, a student locked to two projects, invalid levels or ranks) is saved as `INVALID_INPUT` with the errors. When input is both invalid and infeasible, it is reported as invalid, so the user fixes the data first (D16).
 
 ---
 
 ## 7. Limitations & Analytical Deficiencies
 
-Critically reflect on the limitations of your analytical model:
-1. **Computational Complexity:** Scalability limits as $|S|$ and $|P|$ grow.
-2. **Linear Preference Assumptions:** Limitations of Borda count vs. non-linear student utilities.
-3. **Individual vs. Team Synergies:** Individual skill evaluation vs. collective team diversity.
-4. **Static Allocation:** Inability to capture dynamic scheduling or mid-semester changes.
+1. **Computational Complexity.** ILP is NP-hard in general, so there is no guarantee that solve time grows slowly with the cohort. The model has $n \cdot m$ binary assignment variables and about $n + 2m$ constraints, plus one per fixed assignment, per mandatory requirement and per earlier alternative. For the cohort sizes of one programme it is fast: under 0.4 s per strategy for 300 students and 30 projects (§1.2). Three things would make it slower: many more students and projects, many mandatory requirements that few students meet, and BALANCED, which solves twice. The application has no time limit on the solver, so a very large or very tight cohort would keep the user waiting instead of returning the best allocation found so far.
+
+2. **Linear Preference Assumptions.** The preference objective adds up ranks, so moving one student from 1st to 2nd choice costs the same as moving another from 4th to 5th. Real students probably care much more about the first step, and an unranked project ($m + 1$) is likely worse for a student than one step below their last choice. The BALANCED strategy partly answers this by protecting the worst-off student first, and the Gini coefficient (§3.3) shows how unequal the outcome is, but neither is a model of the students' actual utility. The normalised score $\phi_{s,p}$ (a Borda-type count) has the same linearity. A convex penalty, for example squared ranks, would be a natural next step and would keep the model linear in $x$, since the penalty is computed before solving.
+
+3. **Individual vs. Team Synergies.** Skill fit $\sigma_{s,p}$ is scored per student, against the project's requirements. It does not see the team: three students strong in the same skill score as well as three students who cover different skills, and personal working relations are not modelled at all. Mandatory skills are the only team-level rule (at least one qualified student per project, R13). Modelling complementarity would need variables for pairs of students or coverage per skill, which makes the model larger and harder to explain to a coordinator.
+
+4. **Static Allocation.** Each run is a snapshot. If a student leaves or a project is cancelled during the semester, the coordinator must lock the students who should stay (fixed assignments, R3) and run again; the model has no notion of the cost of moving students who are already working on a project, and it does not plan over time.
+
+5. **Further simplifications we know about.**
+   - *SkillFit tie-break:* the preference term in SKILL_FIT has weight $10^{-3}/n$. Because skill-fit totals are not integers, this weight could in principle outweigh a very small difference in skill fit. Strategy 1 does not have this problem (§2.5).
+   - *Mandatory-skill pre-check:* validation reports a mandatory requirement that no student meets as infeasible even for a project with minimum headcount 0, which the model itself could leave empty (R13). In that rare case the run is rejected although an allocation without that project exists. The coordinator can remove the requirement or the project and run again.
+   - *Self-reported data:* skill levels are reported by the students and not checked, so skill fit is only as good as the reports.
+   - *Fixed weights:* the tie-break weights and $\lambda = 0.5$ in BALANCED are set by us, not by the coordinator. The three alternatives and the recommendations (§5) show the trade-off instead of hiding it in one weight, but a coordinator cannot tune the balance in the interface.
