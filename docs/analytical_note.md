@@ -1,5 +1,5 @@
 # Deliverable 6: Analytical Note & Mathematical Formulation
-## Student Submission Template — TECH5 Collaborative Project
+## TECH5 Collaborative Project
 
 **Team:** Group 5-6  
 **Authors (Team B - Assignment Engine):** Victor Goller, Casper Waale, Ole Kristian Skaar  
@@ -247,8 +247,6 @@ The solution is feasible (`feasibility.is_feasible`) exactly when the list of vi
   Gaps in mandatory requirements are not counted here; §3.1 covers them. Key: `efficiency.unmet_soft_requirements_count`.
 
 ### 3.3 Fairness Indicators
-*Section 6.3 of the specification mandates: rank distribution, unranked count, worst assigned rank, and ONE proposed and justified fairness indicator.*
-
 Throughout, $r_s = \sum_{p \in P} r_{s,p} \, x_{s,p}$ is the rank that student $s$ receives. A student placed on a project they did not rank counts as rank $m + 1$ (R14) in the mean rank, the worst rank, the variance and the Gini coefficient. `Assignment.preference_rank` itself stays `None` for these students.
 
 1. **Rank Distribution:** Histogram vector $[c_1, c_2, \dots, c_m, c_{\text{unr}}]$ where $c_h$ is the number of students assigned to their $h$-th choice.
@@ -261,8 +259,7 @@ Throughout, $r_s = \sum_{p \in P} r_{s,p} \, x_{s,p}$ is the rank that student $
    $$r_{\max} = \max_{(s,p) : x_{s,p}=1} r_{s,p}$$
 
    Because $r_{s,p}$ includes the penalty, $r_{\max} = m + 1$ whenever at least one student is unranked. An empty solution gives $0$.
-4. **Team's Proposed Fairness Indicator (e.g., Gini Coefficient or Rank Variance):**
-   *Provide the mathematical formula, justification, and interpretation:*
+4. **Team's Proposed Fairness Indicator: Gini Coefficient of Ranks ($G$):**
    With $r_s = \sum_{p \in P} r_{s,p} \, x_{s,p}$ the rank assigned to student $s$:
    $$G = \frac{\sum_{s \in S} \sum_{s' \in S} |r_s - r_{s'}|}{2 n \sum_{s \in S} r_s}$$
 
@@ -294,7 +291,7 @@ Throughout, $r_s = \sum_{p \in P} r_{s,p} \, x_{s,p}$ is the rank that student $
 ## 4. Trade-Off Analysis & Solution Comparison
 
 ### 4.1 Comparative Delta Formulation
-Explain how the system computes performance deltas between Solution A and Solution B:
+The comparison computes these deltas between Solution A and Solution B:
 $$\Delta \bar{\sigma} = \bar{\sigma}_B - \bar{\sigma}_A$$
 $$\Delta \bar{r} = \bar{r}_B - \bar{r}_A$$
 $$\Delta r_{\max} = r_{\max, B} - r_{\max, A}$$
@@ -309,7 +306,7 @@ If either solution lacks an indicator, its delta in `delta_metrics` is `None` an
 How to read the signs: a positive $\Delta \bar{\sigma}$ means B has better skill fit. A positive $\Delta \bar{r}$, $\Delta G$, $\Delta \operatorname{Var}(r)$ or $\Delta c_{\text{unr}}$ means B is worse on that indicator. The `trade_off_summary` turns these deltas into plain sentences.
 
 ### 4.2 Allocation Diff & Displaced Student Identification
-Define how student re-allocations are classified:
+Student re-allocations are classified as follows:
 - **Changed Assignments:** $\{(s, p_A, p_B) : x_{s, p_A}^{(A)} = 1 \land x_{s, p_B}^{(B)} = 1 \land p_A \ne p_B\}$
 
   The code walks the students present in both solutions in ascending student ID order and keeps those whose project differs. Each entry records both projects, both stated ranks, both skill-fit scores, `rank_delta` and `rank_change`. A student present in only one solution is not listed. `is_distinct` is true exactly when this set is non-empty, and `changed_students_count` is its size.
@@ -325,8 +322,6 @@ with unranked projects at rank $m + 1$ (R14). The code reads $m$ from the per-pr
 ---
 
 ## 5. Transparent Recommendation Rules
-
-*In accordance with Section 9 of the specification, recommendations must separate calculated evidence from advice across distinct policy priorities.*
 
 `generate_recommendations` in `app/engine/recommendations.py` produces one recommendation per policy priority from the feasible alternatives of a single run. Each recommendation has three parts that the recommendations page shows separately: the criteria used, the calculated evidence (values read from the indicators in §3) and the advice (a sentence on when to adopt the solution). The evidence is computed; the advice is a normative statement written by the team, and the page states that the final decision rests with the programme committee.
 
