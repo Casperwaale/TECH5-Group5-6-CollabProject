@@ -133,7 +133,7 @@ Since $\lvert \Gamma^{(j)} \rvert = n$, at least one student must then move. If 
 
 **Order of strategies (R15).** Alternative 1 uses the strategy the user selects. Each next alternative uses the next strategy in $\Omega$, wrapping around, and adds the no-good cuts above. With PREFERENCE selected and $K = 3$: alternative 1 = PREFERENCE, 2 = SKILL_FIT, 3 = BALANCED.
 
-**Ties (R16).** Each strategy has a secondary term with a small weight, so that among solutions equal on the main goal the one that is better on the other goal is chosen (`docs/testing_and_quality.md`, edge case 2). Any remaining exact tie is resolved by the fixed sorted model order and a single-threaded HiGHS run, so the same input gives the same result.
+**Ties (R16).** Each strategy has a secondary term with a small weight, so that among solutions equal on the main goal the one that is better on the other goal is chosen (`docs/testing_and_quality.md`, edge case 2). Any remaining exact tie is resolved by the fixed sorted model order and a single-threaded HiGHS run, so the same input gives the same result with the same Pyomo and HiGHS versions.
 
 - **Strategy 1: PREFERENCE (minimise total rank)**
 
@@ -297,10 +297,9 @@ Throughout, $r_s = \sum_{p \in P} r_{s,p} \, x_{s,p}$ is the rank that student $
 Explain how the system computes performance deltas between Solution A and Solution B:
 $$\Delta \bar{\sigma} = \bar{\sigma}_B - \bar{\sigma}_A$$
 $$\Delta \bar{r} = \bar{r}_B - \bar{r}_A$$
-$$\Delta r_{\max} = r_{\max, B} - r_{\max, A}$$
 $$\Delta G = G_B - G_A$$
 
-`compare_two_solutions` takes each delta from the indicators already stored on the two solutions, always as B minus A, and rounds it to 4 decimals. The code does not compute $\Delta r_{\max}$; instead it reports the deltas of the rank variance and the unranked count:
+`compare_two_solutions` takes each delta from the indicators already stored on the two solutions, always as B minus A, and rounds it to 4 decimals. It also reports the deltas of the rank variance and the unranked count:
 
 $$\Delta \operatorname{Var}(r) = \operatorname{Var}(r)_B - \operatorname{Var}(r)_A, \qquad \Delta c_{\text{unr}} = c_{\text{unr}, B} - c_{\text{unr}, A}$$
 
@@ -362,7 +361,7 @@ The model rests on the assumptions below. Each one is tested; the edge-case numb
 1. **Student Submission Incompleteness.** A student may rank fewer than three projects, or none; this gives a warning, not a rejection, because the student must still be placed (R6, edge case 1). An unranked project gets the penalty rank $r_{s,p} = m + 1$ and preference score $\phi_{s,p} = 0$, so any ranked project is better for the solver than any unranked one (R14). The same penalty is used in every rank indicator in §3, so the indicators measure what the solver optimised. In the saved result, the student's `preference_rank` stays empty and the student is counted in `unranked_count`, so the interface never shows a rank the student did not give.
 
 2. **Ties in Preferences.**
-   - *Across students:* many students may rank the same project first. This is valid and always solved (edge case 2). Among allocations equal on the strategy's main goal, the secondary term in the objective (§2.5) picks the one that is better on the other goal. Any remaining exact tie is resolved the same way every time, because the model is built in sorted identifier order and HiGHS runs on one thread (R16). The same input therefore gives the same alternatives, which keeps the demonstration reproducible.
+   - *Across students:* many students may rank the same project first. This is valid and always solved (edge case 2). Among allocations equal on the strategy's main goal, the secondary term in the objective (§2.5) picks the one that is better on the other goal. Any remaining exact tie is resolved the same way every time, because the model is built in sorted identifier order and HiGHS runs on one thread (R16). The same input therefore gives the same alternatives with the same Pyomo and HiGHS versions, which keeps the demonstration reproducible.
    - *Within one student's list:* two projects with the same rank, or the same project listed twice, are rejected before solving, because a rank must say which of two projects the student prefers (R12). A rank below 1 is also rejected.
 
 3. **Skill Levels.** Levels run from 1 to 5; a skill the student does not have counts as level 0. Any other stored level is rejected (R7).
