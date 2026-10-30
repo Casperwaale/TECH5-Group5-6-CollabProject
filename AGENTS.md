@@ -55,7 +55,16 @@ The brief grades our Git history, our reviews and how we use AI, so every change
 
 ## Team A notes
 
-*To be written by Team A: conventions for routes and templates, and what the UI needs from the engine.*
+- **Area:** `app/visualization/routes.py` and `app/visualization/templates/`. All routes live on the blueprint `web_bp`; link with `url_for("visualization_web.<function>")`.
+- **Write routes follow one pattern.** Check `auth.can_edit_cohort_data()` first, read form fields with `.get(...).strip()`, validate, then `flask.flash(...)` and `flask.redirect(...)` back to the list page. Never raise on bad input; show a message instead (rule 4). Flash categories are `success`, `info`, `warning` and `danger`.
+- **Shared validation.** Project create and edit both use `_parse_project_form`; change the rules there, not in each route.
+- **The UI talks to the engine only through the contract** (`AssignmentEngineContract`). `MockAssignmentEngine` is used only when the engine raises `NotImplementedError`.
+- **What the UI reads from the engine** (keep these stable):
+  - Indicators: the keys listed under Team B notes.
+  - Comparison (`compare.html`): `changed_students_count`, `is_distinct`, `delta_mean_skill_fit`, `delta_mean_rank`, `rank_improved_count`, `rank_worsened_count`, `trade_off_summary`, `delta_metrics.gini_delta`, and in each `changed_assignments` row `student_id`, `project_a_id`, `project_b_id`, `rank_a`, `rank_b`.
+  - Recommendations (`recommendations.html`): `priority_focus`, `recommended_solution_id`, `recommended_alternative_number`, `criteria_used`, `evidence`, `advice`.
+  - An unranked assignment has `preference_rank = None`; show it as unranked, never as a rank number.
+- **Tests:** `tests/test_visualization_component.py` (supplied) and `tests/test_team_a_compare.py`. Run `pytest -q` before every commit.
 
 ## Team B notes
 
