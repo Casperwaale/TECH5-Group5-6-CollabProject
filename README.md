@@ -1,5 +1,5 @@
 # TECH5: Student-to-Project Assignment Decision Support System
-### Student Starter Carcass & Collaborative Project Kit
+### Student-to-Project Assignment Decision Support System
 **NHH Norwegian School of Economics — Department of Business and Management Science**  
 *Course: TECH5 Programming & Application Design*
 
@@ -9,7 +9,8 @@
 
 Welcome to the **TECH5 Collaborative Project: Student-to-Project Assignment Decision Support System (DSS)**.
 
-This repository provides the starter carcass for a three-week collaborative software engineering project. The application assists academic coordinators and decision-makers in assigning students to semester research and capstone projects under multiple competing criteria:
+
+This repository contains the completed application developed during a three-week collaborative software engineering project. The application assists academic coordinators and decision-makers in assigning students to semester research and capstone projects under multiple competing criteria:
 - **Student ranked preferences** (satisfaction / rank regret)
 - **Student technical proficiencies & project skill requirements** (competence matching)
 - **Project capacity constraints** (minimum and maximum headcount quotas)
@@ -60,12 +61,14 @@ The project is designed for two collaborating student development teams:
 
 ### Team A: Visualization and Recommendation Component (`app/visualization/`)
 - **Workflow & UI**: Complete web interface for inspecting cohorts, editing student/project/skill data, creating fixed assignments, and triggering assignment runs.
-- **Pluggable Mock Engine**: The starter kit includes a fully operational `MockAssignmentEngine` (`app/contract/mocks.py`). Team A can develop, test, and demonstrate all UI workflows, visual comparisons, and recommendations **immediately**, without waiting for Team B to complete the solver!
+
+- **Assignment Engine Integration**: The web application uses the real `AssignmentEngine` implemented in `app/engine/solvers.py` to generate student-to-project assignments. The `MockAssignmentEngine` (`app/contract/mocks.py`) is retained for automated testing and contract verification.
+
 - **Comparison & Recommendations**: Side-by-side comparison of alternative solutions, student re-allocation diffs, and transparent recommendations across multiple administrative priorities.
 
 ### Team B: Assignment Engine (`app/engine/`)
 - **Optimization Formulation (`app/engine/solvers.py`)**:
-  - Implement an approved mathematical assignment methodology (e.g., Integer Linear Programming via PuLP/CBC).
+  - Implement Integer Linear Programming (ILP) using Pyomo with the HiGHS solver (`app/engine/solvers.py`).
   - Implement concrete strategies inheriting from `AssignmentStrategy` (`PreferenceOrientedSolver`, `SkillFitOrientedSolver`, `BalancedTradeoffSolver`).
   - Implement generation of distinct Pareto alternatives via no-good integer cuts.
   - Implement `AssignmentEngine.run_assignment(...)` and `AssignmentEngine.execute_run(...)`.
@@ -104,34 +107,42 @@ python run.py
 
 Navigate to **`http://127.0.0.1:5000`** in your browser.
 
+
 > [!TIP]
-> **Mock Fallback:** When `app/engine/solvers.py` raises `NotImplementedError`, the web application automatically falls back to `MockAssignmentEngine` with an informative banner. This allows Team A to test all interactive features end-to-end at all times.
+> **Assignment Engine:** The web application uses the real optimization engine in `app/engine/solvers.py`, implemented with Pyomo and HiGHS. The `MockAssignmentEngine` is retained for automated testing and is not used during normal application operation.
+
 
 ---
 
 ## 4. Automated Testing & Verification
 
-The repository contains **50 automated tests** structured to guide development for both teams:
+
+The repository contains **75 automated tests** covering component functionality, database persistence, integration, input validation, optimization, and edge cases:
+
 
 ```powershell
 # Run the complete test suite
 .\.venv\Scripts\pytest -v
 ```
 
-### Understanding Test Results in the Starter Carcass:
-When you run pytest on the starter carcass, you will see:
-- **35 tests PASS**: Verifies domain models, 3NF database persistence, cohort validation, contract compliance, mock engine substitutability, dashboard, student/lock workflows, and scenario runners.
-- **15 tests XFAIL (Expected Failures)**:
-  - **Team A Tasks (3 xfails)** in `tests/test_visualization_component.py`:
-    - `test_skills_crud_workflow`: Skill creation and catalog management.
-    - `test_projects_crud_workflow`: Project creation and requirement matrix parsing.
-    - `test_compare_solutions_view`: Side-by-side solution comparison controller.
-  - **Team B Tasks (12 xfails)**:
-    - 4 metrics tests in `tests/test_metrics.py` (Gini coefficient, skill fit, solution indicators, comparison).
-    - 1 alternative generation test in `tests/test_solvers.py`.
-    - 7 solver-dependent edge cases in `tests/test_edge_cases.py` (cases 1, 2, 3, 4, 13, 14, 15).
 
-**Goal for Students:** As Team A implements the project/skill forms and comparison views, and Team B implements the solver and metrics, these 15 tests will cleanly transition to passing (`XPASS` / `PASSED`).
+### Current Test Results
+
+The complete test suite has been verified using Python 3.10.4 and pytest 9.1.1.
+
+- **75 tests passed**
+- **0 tests failed**
+- **0 expected failures (XFAIL)**
+
+The automated tests cover:
+
+- **Component tests:** Domain models, input validation, optimization strategies, analytical metrics, and user interface functionality.
+- **Database tests:** Database initialization, persistence, and retrieval of project, student, and assignment data.
+- **Integration tests:** Contract compliance, complete assignment workflows, and infeasible scenarios.
+- **Edge-case tests:** All 15 boundary conditions documented in `docs/analytical_note.md`.
+
+For detailed test descriptions and the complete execution log, see [`docs/testing_and_quality.md`](docs/testing_and_quality.md).
+
 
 ---
 
