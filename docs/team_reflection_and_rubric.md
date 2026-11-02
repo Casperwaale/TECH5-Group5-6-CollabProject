@@ -67,7 +67,7 @@ We worked in small tasks, each on its own branch and pull request, with the supp
   - Rules written once in a file worked better than repeating instructions in every prompt.
 
 - [Ole Kristian Skaar: AI use, to be written by Ole Kristian Skaar]
-- [Alex Solheim: AI use, to be written by Alex Solheim]
+- **Alex Solheim:** I used Claude mainly as a guide for Git and GitHub and as a checking and validating aid for the Team A work. I had little Git experience before this project, so I asked it to take me through each step of the branch, commit, push, pull request and merge flow, and I ran every command myself in the terminal. It also helped improve and polish the Team A notes in `AGENTS.md` (#38) and helped with the Week 2 report and the PDF version of the analytical note. I read every diff before committing, checked the field names in the notes against `compare.html` and `routes.py`, ran `pytest -q` before each commit, and pulled my teammates' branches to my machine to run the tests and the pages before I approved them. I did not let it change the supplied tests, and I checked its claims against the repository.
 - [Herman Kilde: AI use, to be written by Herman Kilde]
 - [Nils Lærum Harloff: AI use, to be written by Nils Lærum Harloff]
 
@@ -97,7 +97,8 @@ We worked in small tasks, each on its own branch and pull request, with the supp
 5. **Process slips happen under deadline.** Merging #32 before review and PRs going to the upstream repository show that the workflow needs checking on every PR, not just agreeing on once.
 
 Personal lessons:
-- [Alex Solheim: personal lessons, to be written by Alex Solheim]
+- **Alex Solheim:** 
+I learned how to work better as a team, not just our self chosen teams, but also across the Development team. Working in a common repository requires solid ground rules which I felt we had in the team contract, as well as smooth and fast communication in our Messenger group. This allowed us to collaborate more seamlessly and without any big issues, which is something that makes group work much more efficient in my experience. I also think the way we split the tasks between the members in Team A was very effective, and especially that we did it from the get go so that each of us had clear objectives which allowed us to take our personal workstreams as far as possible without interfering with the others streams. Lastly, I feel more comfortable with the whole Git flow now, specifically with things like checking the base repository when opening a pull request, because as others also experienced, mine defaulted to the upstream repository.
 - [Herman Kilde: personal lessons, to be written by Herman Kilde]
 - [Nils Lærum Harloff: personal lessons, to be written by Nils Lærum Harloff]
 - **Victor Goller:**
