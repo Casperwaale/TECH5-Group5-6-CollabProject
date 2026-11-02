@@ -46,7 +46,26 @@ We worked in small tasks, each on its own branch and pull request, with the supp
 `AGENTS.md` requires AI help to be disclosed in each commit. Commits by Victor, Casper, Alex, Herman and Nils carry `Assisted-by:` or `Co-Authored-By:` lines naming Claude.
 
 - **Casper Waale-Andersen:** I used Claude Code for the metrics work (#16–#19). I gave it one function per prompt and pointed it at the rules it had to follow: the requirement IDs in `team_b_decisions.md` (R4 skill fit, R9 Gini, R11 output keys, R14 unranked rank) and the supplied tests as the specification. I read every diff before committing, checked it against the decision it cited, and ran `pytest -q` before each commit. The AI-assisted commits carry a `Co-Authored-By` line (for example 5fefbbb, a43548b, 93f13c1, dedd3ec), and their messages name the requirement they implement.
-- [Victor Goller: AI use, to be written by Victor Goller]
+- **Victor Goller:** I used Claude Code in VS Code, plus a subagent I set up for the ILP code (`.claude/agents/ilp-agent.md`).
+
+  *What I used it for:*
+  - **Working agreement (week 1).** Drafted `AGENTS.md`, the pull request template and `docs/team_b_decisions.md`. The rules live in a plain file, so teammates using other AI tools read the same rules.
+  - **Requirements.** Went through the brief, the tests, the schema and the starter code, and listed every rule the model must follow (R1–R17), each with its source.
+  - **ILP model.** I made the modelling decisions. AI helped with notation, consistency and the LaTeX version (`docs/model/ilp_formulation.tex`).
+  - **`solvers.py`.** Built step by step in the TECH4 order: data, model, solve, read results. One pull request per step. The ILP agent is limited to the TECH4 toolkit and style, and it is not given our model. The code therefore uses constructs I can explain line by line.
+  - **Robustness.** A sweep of bad inputs found three bugs: rank gaps after a deleted project, a crash on a skill missing from the catalogue, and the wrong status when input was both invalid and infeasible. Fixed in PR #25 and #26.
+  - **Git.** Claude created the branches, wrote the commits in our format, pushed, and opened the pull requests with the template filled in. I am the author of every commit. All 27 of my commits on `main` name Claude in a `Co-Authored-By` line.
+  - **Documentation.** Analytical note §1, §2, §6 and §7, the demonstration guide, the architecture diagrams and the first draft of the slides.
+
+  *How I kept control:*
+  - The supplied tests are the specification. `AGENTS.md` forbids editing a test to make it pass.
+  - 16 of my 18 merged pull requests were approved by a teammate. The other two (#8 and #9) were solver PRs I had let Claude stack on top of each other. They were merged into their base branch instead of `main`. We reopened them against `main` as #12 and #13, both approved, and stopped stacking pull requests.
+  - I checked AI output against the sources. Early on it presented requirements as open choices when the brief or the tests already settled them. It also derived one rule from the brief alone that the tests contradict: whether students may be left unassigned. After that we wrote a rule at the top of `team_b_decisions.md`: check every source before calling something a choice, and the tests win conflicts.
+
+  *What I learned:*
+  - AI was fast and reliable at routine work: Git, formatting, documentation and consistency checks. It was weaker at knowing what had already been decided, unless it was pointed to the sources.
+  - Rules written once in a file worked better than repeating instructions in every prompt.
+
 - [Ole Kristian Skaar: AI use, to be written by Ole Kristian Skaar]
 - [Alex Solheim: AI use, to be written by Alex Solheim]
 - [Herman Kilde: AI use, to be written by Herman Kilde]
