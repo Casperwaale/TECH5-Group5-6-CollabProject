@@ -35,7 +35,7 @@ In accordance with Section 8 of the TECH5 Project Specification, the interaction
 |                     COMPONENT B: ASSIGNMENT ENGINE                      |
 |           app/engine/solvers.py: AssignmentEngine                       |
 |   - Strategy Pattern: PREFERENCE, SKILL_FIT, BALANCED                   |
-|   - PuLP Integer Linear Programming & Pareto No-Good Cuts               |
+|   - Pyomo ILP + HiGHS & Pareto No-Good Cuts      |
 |   - Analytical Indicators (Gini, Mean Rank, Skill Fit, Utilization)     |
 |                                                                         |
 +-------------------------------------------------------------------------+

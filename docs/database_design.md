@@ -64,7 +64,7 @@ erDiagram
     PREFERENCES {
         text student_id PK, FK
         text project_id PK, FK
-        integer rank UK
+        integer rank
     }
 
     FIXED_ASSIGNMENTS {
@@ -105,6 +105,8 @@ erDiagram
         text unmet_requirements
     }
 ```
+
+**Preference rank constraint:** The database enforces `UNIQUE (student_id, rank)`, meaning each student can use a particular preference rank only once. The same rank may be used by different students.
 
 ---
 
@@ -227,7 +229,9 @@ CREATE TABLE IF NOT EXISTS solutions (
 ```
 
 ### 3.10 `assignments` (Detailed Student Allocations)
-Stores the individual match tuples. Guarantees that within a solution, a student is assigned to exactly one project (`uq_solution_student`):
+
+Stores the individual student-to-project assignments. The unique constraint `uq_solution_student` ensures that each student can appear at most once within a solution. The assignment engine enforces the requirement that every student must be assigned to exactly one project.
+
 ```sql
 CREATE TABLE IF NOT EXISTS assignments (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -269,96 +273,140 @@ The relational design satisfies all conditions of 3NF:
 
 ## 5. Non-Trivial Analytical SQL Queries
 
-Below are four representative analytical queries included in `app/persistence/queries.sql`:
 
-### 5.1 Project Allocation & Capacity Utilization Analysis
-Computes assigned headcounts, minimum/maximum capacity utilization percentages, and flags under-allocated or full projects:
+The application includes six representative SQL queries in `app/persistence/queries.sql`. These demonstrate relational joins, filtering, aggregation, subqueries, capacity monitoring, preference analysis, fixed-assignment verification, and historical retrieval. The queries are documented below using the SQL implemented in the project.
+
+
+### 5.1 Full Solution Assignments View
+
+Retrieves the students assigned to a selected solution, including student names, project titles, fixed-assignment status, preference ranks, skill-fit scores, and unmet requirements. The query demonstrates multi-table joins and filtering.
+
 ```sql
-SELECT 
+SELECT
+    a.solution_id,
+    s.id AS student_id,
+    s.display_name AS student_name,
+    p.id AS project_id,
+    p.title AS project_title,
+    a.is_fixed,
+    a.preference_rank,
+    a.skill_fit_score,
+    a.unmet_requirements
+FROM assignments a
+JOIN students s ON a.student_id = s.id
+JOIN projects p ON a.project_id = p.id
+WHERE a.solution_id = :solution_id
+ORDER BY a.preference_rank IS NULL, a.preference_rank ASC, s.display_name ASC;
+```
+
+```
+
+
+### 5.2 Project Capacity Utilization & Demand Aggregate
+
+Compares the number of students assigned to each project with its minimum and maximum capacities. It calculates utilization percentages, remaining seats, and capacity status for a selected solution.
+
+```sql
+SELECT
     p.id AS project_id,
     p.title AS project_title,
     p.min_capacity,
     p.max_capacity,
-    COUNT(a.student_id) AS assigned_count,
-    ROUND(CAST(COUNT(a.student_id) AS REAL) / p.max_capacity * 100.0, 1) AS max_capacity_utilization_pct,
-    CASE 
-        WHEN COUNT(a.student_id) < p.min_capacity THEN 'UNDER_MIN_CAPACITY'
-        WHEN COUNT(a.student_id) = p.max_capacity THEN 'AT_MAX_CAPACITY'
-        ELSE 'FEASIBLE'
+    COUNT(a.id) AS assigned_count,
+    ROUND(COUNT(a.id) * 100.0 / p.max_capacity, 1) AS utilization_percentage,
+    (p.max_capacity - COUNT(a.id)) AS remaining_seats,
+    CASE
+        WHEN COUNT(a.id) > p.max_capacity THEN 'OVER_CAPACITY'
+        WHEN COUNT(a.id) < p.min_capacity THEN 'UNDER_MINIMUM'
+        WHEN COUNT(a.id) = p.max_capacity THEN 'FULL'
+        ELSE 'AVAILABLE'
     END AS capacity_status
 FROM projects p
-LEFT JOIN assignments a 
-    ON p.id = a.project_id 
-    AND a.solution_id = :solution_id
+LEFT JOIN assignments a ON p.id = a.project_id AND a.solution_id = :solution_id
 GROUP BY p.id, p.title, p.min_capacity, p.max_capacity
-ORDER BY p.id ASC;
+ORDER BY utilization_percentage DESC;
 ```
 
-### 5.2 Student Skill Deficit & Gap Analysis
-Identifies assigned students who do not meet the minimum skill level requested by their assigned project:
+
+
+### 5.3 Preference Satisfaction Distribution
+
+Measures the distribution of assigned preference ranks for a selected solution. Students assigned outside their submitted preference lists are grouped into an unranked category.
+
 ```sql
-SELECT 
+SELECT
+    COALESCE(CAST(a.preference_rank AS TEXT), 'Unranked / Outside Preference') AS rank_bucket,
+    COUNT(a.id) AS student_count,
+    ROUND(COUNT(a.id) * 100.0 / (SELECT COUNT(*) FROM assignments WHERE solution_id = :solution_id), 1) AS percentage_of_cohort
+FROM assignments a
+WHERE a.solution_id = :solution_id
+GROUP BY a.preference_rank
+ORDER BY a.preference_rank IS NULL, a.preference_rank ASC;
+```
+
+
+
+### 5.4 Unmet Skill Requirements & Competence Gap Analysis
+
+Identifies student-project assignments where a student's skill level falls below a project requirement. Missing student skills are treated as level 0. The query shows the size of each skill deficit and whether the requirement is mandatory.
+
+```sql
+SELECT
     a.solution_id,
-    a.student_id,
+    s.id AS student_id,
     s.display_name AS student_name,
-    a.project_id,
+    p.id AS project_id,
     p.title AS project_title,
     pr.skill_id,
     sk.name AS skill_name,
     pr.minimum_level AS required_level,
     COALESCE(ss.level, 0) AS student_level,
-    pr.is_mandatory,
-    (pr.minimum_level - COALESCE(ss.level, 0)) AS skill_deficit
+    (pr.minimum_level - COALESCE(ss.level, 0)) AS skill_deficit,
+    pr.is_mandatory
 FROM assignments a
 JOIN students s ON a.student_id = s.id
 JOIN projects p ON a.project_id = p.id
-JOIN project_requirements pr ON a.project_id = pr.project_id
+JOIN project_requirements pr ON p.id = pr.project_id
 JOIN skills sk ON pr.skill_id = sk.id
-LEFT JOIN student_skills ss 
-    ON a.student_id = ss.student_id 
-    AND pr.skill_id = ss.skill_id
+LEFT JOIN student_skills ss ON s.id = ss.student_id AND pr.skill_id = ss.skill_id
 WHERE a.solution_id = :solution_id
   AND COALESCE(ss.level, 0) < pr.minimum_level
 ORDER BY pr.is_mandatory DESC, skill_deficit DESC;
 ```
 
-### 5.3 Preference Satisfaction & Rank Distribution
-Aggregates rank distribution counts and percentages for a given solution:
+### 5.5 Fixed Assignment Integrity Audit
+
+Checks whether every administrative fixed assignment is respected in a selected solution. The query compares each required project with the student's actual assignment and classifies the result as `HONORED`, `UNASSIGNED`, or `VIOLATED`.
+
 ```sql
-SELECT 
-    CASE 
-        WHEN a.preference_rank IS NULL THEN 'Unranked (Assigned)'
-        WHEN a.preference_rank = 1 THEN '1st Choice'
-        WHEN a.preference_rank = 2 THEN '2nd Choice'
-        WHEN a.preference_rank = 3 THEN '3rd Choice'
-        ELSE printf('%dth Choice', a.preference_rank)
-    END AS choice_category,
-    COUNT(a.student_id) AS student_count,
-    ROUND(CAST(COUNT(a.student_id) AS REAL) / (SELECT COUNT(*) FROM assignments WHERE solution_id = :solution_id) * 100.0, 1) AS percentage
-FROM assignments a
-WHERE a.solution_id = :solution_id
-GROUP BY choice_category
-ORDER BY MIN(COALESCE(a.preference_rank, 999)) ASC;
+SELECT
+    fa.student_id,
+    fa.project_id AS required_project_id,
+    fa.reason,
+    a.project_id AS actual_project_id,
+    CASE
+        WHEN a.project_id = fa.project_id THEN 'HONORED'
+        WHEN a.project_id IS NULL THEN 'UNASSIGNED'
+        ELSE 'VIOLATED'
+    END AS compliance_status
+FROM fixed_assignments fa
+LEFT JOIN assignments a ON fa.student_id = a.student_id AND a.solution_id = :solution_id;
 ```
 
-### 5.4 Cross-Solution Re-Allocation Audit
-Identifies students who were assigned to different projects between two alternative solutions (e.g. Solution A vs Solution B):
+### 5.6 Historical Runs Overview with Solution Counts and Timestamps
+
+Retrieves the 25 most recent assignment runs, including their creation timestamps, execution status, configuration, and number of generated alternative solutions. The query demonstrates historical retrieval using a left join, aggregation, and sorting.
+
 ```sql
-SELECT 
-    s.id AS student_id,
-    s.display_name AS student_name,
-    asg_a.project_id AS solution_a_project,
-    asg_a.preference_rank AS solution_a_rank,
-    asg_b.project_id AS solution_b_project,
-    asg_b.preference_rank AS solution_b_rank,
-    (COALESCE(asg_b.preference_rank, 99) - COALESCE(asg_a.preference_rank, 99)) AS rank_delta
-FROM assignments asg_a
-JOIN assignments asg_b 
-    ON asg_a.student_id = asg_b.student_id
-JOIN students s 
-    ON s.id = asg_a.student_id
-WHERE asg_a.solution_id = :solution_a_id
-  AND asg_b.solution_id = :solution_b_id
-  AND asg_a.project_id != asg_b.project_id
-ORDER BY s.id ASC;
+SELECT
+    r.id AS run_id,
+    r.created_at,
+    r.status,
+    COUNT(s.id) AS alternative_solutions_count,
+    r.configuration
+FROM assignment_runs r
+LEFT JOIN solutions s ON r.id = s.run_id
+GROUP BY r.id, r.created_at, r.status, r.configuration
+ORDER BY r.created_at DESC
+LIMIT 25;
 ```
