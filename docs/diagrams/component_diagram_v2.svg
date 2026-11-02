@@ -1,0 +1,142 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 825" width="1000" height="825" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <title>TECH5 assignment DSS: component diagram</title>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#1f2937"/>
+    </marker>
+    <marker id="arrowGrey" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#6b7280"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="1000" height="825" fill="#ffffff"/>
+
+  <!-- User -->
+  <rect x="390" y="18" width="220" height="46" rx="23" fill="#ffffff" stroke="#1f2937" stroke-width="1.5"/>
+  <text x="500" y="38" text-anchor="middle" font-size="14" font-weight="600" fill="#111827">Coordinator / administrator</text>
+  <text x="500" y="55" text-anchor="middle" font-size="12" fill="#374151">in the browser</text>
+
+  <!-- Team A band -->
+  <rect x="20" y="90" width="960" height="125" rx="10" fill="#eff6ff" stroke="#93c5fd"/>
+  <text x="36" y="110" font-size="13" font-weight="700" fill="#1d4ed8">TEAM A · Visualization &amp; Recommendation</text>
+
+  <rect x="60" y="128" width="200" height="62" rx="6" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
+  <text x="160" y="154" text-anchor="middle" font-size="14" font-weight="700" fill="#111827">auth.py</text>
+  <text x="160" y="174" text-anchor="middle" font-size="12" fill="#374151">user roles</text>
+
+  <rect x="390" y="128" width="220" height="62" rx="6" fill="#dbeafe" stroke="#2563eb" stroke-width="2"/>
+  <text x="500" y="154" text-anchor="middle" font-size="14" font-weight="700" fill="#111827">routes.py + templates</text>
+  <text x="500" y="174" text-anchor="middle" font-size="12" fill="#374151">web pages and forms</text>
+
+  <rect x="740" y="128" width="200" height="62" rx="6" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
+  <text x="840" y="150" text-anchor="middle" font-size="14" font-weight="700" fill="#111827">recommendations.py</text>
+  <text x="840" y="168" text-anchor="middle" font-size="12" fill="#374151">advice per policy priority</text>
+  <text x="840" y="183" text-anchor="middle" font-size="11" fill="#6b7280">(file lives in app/engine/)</text>
+
+  <!-- Contract band -->
+  <rect x="20" y="240" width="960" height="140" rx="10" fill="#f9fafb" stroke="#6b7280" stroke-width="1.5" stroke-dasharray="7 5"/>
+  <text x="36" y="260" font-size="13" font-weight="700" fill="#374151">SHARED CONTRACT</text>
+
+  <!-- contract.py sits on the call path: the call goes in at the top and out at the bottom -->
+  <rect x="365" y="268" width="270" height="96" rx="6" fill="#f3f4f6" stroke="#6b7280" stroke-width="2"/>
+  <text x="500" y="288" text-anchor="middle" font-size="14" font-weight="700" fill="#111827">contract.py</text>
+  <text x="500" y="304" text-anchor="middle" font-size="11" fill="#374151">agreed method names, input and output</text>
+  <line x1="500" y1="314" x2="500" y2="358" stroke="#d1d5db"/>
+  <text x="432" y="328" text-anchor="middle" font-size="12" font-weight="700" fill="#111827">call</text>
+  <text x="432" y="343" text-anchor="middle" font-size="11" fill="#374151">validate_inputs,</text>
+  <text x="432" y="357" text-anchor="middle" font-size="11" fill="#374151">then execute_run</text>
+  <text x="568" y="328" text-anchor="middle" font-size="12" font-weight="700" fill="#111827">answer</text>
+  <text x="568" y="343" text-anchor="middle" font-size="11" fill="#374151">AssignmentRun:</text>
+  <text x="568" y="357" text-anchor="middle" font-size="11" fill="#374151">alternatives, scores</text>
+
+  <rect x="740" y="290" width="200" height="54" rx="6" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.5"/>
+  <text x="840" y="312" text-anchor="middle" font-size="14" font-weight="700" fill="#111827">mocks.py</text>
+  <text x="840" y="331" text-anchor="middle" font-size="12" fill="#374151">fake engine, same methods</text>
+
+  <!-- Team B band -->
+  <rect x="20" y="405" width="960" height="125" rx="10" fill="#f0fdf4" stroke="#86efac"/>
+  <text x="36" y="425" font-size="13" font-weight="700" fill="#15803d">TEAM B · Assignment Engine</text>
+
+  <rect x="60" y="443" width="200" height="62" rx="6" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="160" y="469" text-anchor="middle" font-size="14" font-weight="700" fill="#111827">validation.py</text>
+  <text x="160" y="489" text-anchor="middle" font-size="12" fill="#374151">checks the input</text>
+
+  <rect x="390" y="443" width="220" height="62" rx="6" fill="#dcfce7" stroke="#16a34a" stroke-width="2"/>
+  <text x="500" y="465" text-anchor="middle" font-size="14" font-weight="700" fill="#111827">solvers.py</text>
+  <text x="500" y="482" text-anchor="middle" font-size="12" fill="#374151">ILP model, 3 strategies,</text>
+  <text x="500" y="497" text-anchor="middle" font-size="12" fill="#374151">solved with HiGHS</text>
+
+  <rect x="740" y="443" width="200" height="62" rx="6" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="840" y="469" text-anchor="middle" font-size="14" font-weight="700" fill="#111827">metrics.py</text>
+  <text x="840" y="489" text-anchor="middle" font-size="12" fill="#374151">scores each allocation</text>
+
+  <!-- Shared data band -->
+  <rect x="20" y="555" width="960" height="125" rx="10" fill="#f9fafb" stroke="#d1d5db"/>
+  <text x="36" y="575" font-size="13" font-weight="700" fill="#374151">SHARED DATA</text>
+
+  <rect x="60" y="593" width="220" height="62" rx="6" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.5"/>
+  <text x="170" y="619" text-anchor="middle" font-size="14" font-weight="700" fill="#111827">models.py</text>
+  <text x="170" y="639" text-anchor="middle" font-size="12" fill="#374151">data classes used by every box</text>
+
+  <rect x="390" y="593" width="220" height="62" rx="6" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.5"/>
+  <text x="500" y="619" text-anchor="middle" font-size="14" font-weight="700" fill="#111827">repositories.py</text>
+  <text x="500" y="639" text-anchor="middle" font-size="12" fill="#374151">save and read</text>
+
+  <!-- database cylinder -->
+  <path d="M760,599 L760,651 A80,12 0 0 0 920,651 L920,599" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.5"/>
+  <ellipse cx="840" cy="599" rx="80" ry="12" fill="#e5e7eb" stroke="#6b7280" stroke-width="1.5"/>
+  <text x="840" y="635" text-anchor="middle" font-size="14" font-weight="700" fill="#111827">SQLite database</text>
+
+  <!-- Arrows: user to routes -->
+  <line x1="500" y1="64" x2="500" y2="126" stroke="#1f2937" stroke-width="1.6" marker-end="url(#arrow)"/>
+
+  <!-- routes to auth and recommendations -->
+  <line x1="390" y1="159" x2="262" y2="159" stroke="#1f2937" stroke-width="1.6" marker-end="url(#arrow)"/>
+  <text x="326" y="152" text-anchor="middle" font-size="11" fill="#374151">check role</text>
+  <line x1="610" y1="159" x2="738" y2="159" stroke="#1f2937" stroke-width="1.6" marker-end="url(#arrow)"/>
+  <text x="674" y="152" text-anchor="middle" font-size="11" fill="#374151">get advice</text>
+
+  <!-- the call down and the answer back up, through contract.py -->
+  <line x1="432" y1="190" x2="432" y2="266" stroke="#1f2937" stroke-width="2.6" marker-end="url(#arrow)"/>
+  <line x1="432" y1="364" x2="432" y2="441" stroke="#1f2937" stroke-width="2.6" marker-end="url(#arrow)"/>
+  <line x1="568" y1="443" x2="568" y2="366" stroke="#1f2937" stroke-width="2.6" marker-end="url(#arrow)"/>
+  <line x1="568" y1="268" x2="568" y2="192" stroke="#1f2937" stroke-width="2.6" marker-end="url(#arrow)"/>
+
+  <!-- routes to mocks (fallback) -->
+  <path d="M600,190 C630,240 760,240 790,288" fill="none" stroke="#6b7280" stroke-width="1.4" stroke-dasharray="5 4" marker-end="url(#arrowGrey)"/>
+  <text x="860" y="232" text-anchor="middle" font-size="11" fill="#6b7280">used before solvers.py was ready</text>
+
+  <!-- solvers to validation and metrics -->
+  <line x1="390" y1="474" x2="262" y2="474" stroke="#1f2937" stroke-width="1.6" marker-end="url(#arrow)"/>
+  <text x="298" y="467" text-anchor="middle" font-size="11" fill="#374151">check input</text>
+  <line x1="610" y1="474" x2="738" y2="474" stroke="#1f2937" stroke-width="1.6" marker-end="url(#arrow)"/>
+  <text x="674" y="467" text-anchor="middle" font-size="11" fill="#374151">skill fit, scores</text>
+
+  <!-- solvers to repositories -->
+  <line x1="500" y1="505" x2="500" y2="591" stroke="#1f2937" stroke-width="1.6" marker-end="url(#arrow)"/>
+  <text x="508" y="545" font-size="11" fill="#374151">save run</text>
+
+  <!-- routes to repositories (data entry), down the left gap; skips the contract on purpose -->
+  <path d="M405,190 L405,225 L340,225 L340,573 L430,573 L430,591" fill="none" stroke="#1f2937" stroke-width="1.6" marker-end="url(#arrow)"/>
+  <text x="348" y="545" font-size="11" fill="#374151">data entry,</text>
+  <text x="348" y="559" font-size="11" fill="#374151">read runs</text>
+
+  <!-- repositories to database -->
+  <line x1="610" y1="624" x2="758" y2="624" stroke="#1f2937" stroke-width="1.6" marker-end="url(#arrow)"/>
+
+  <!-- Legend -->
+  <g font-size="12" fill="#374151">
+    <rect x="40" y="709" width="18" height="14" rx="3" fill="#dbeafe" stroke="#2563eb"/>
+    <text x="66" y="721">Team A</text>
+    <rect x="140" y="709" width="18" height="14" rx="3" fill="#dcfce7" stroke="#16a34a"/>
+    <text x="166" y="721">Team B</text>
+    <rect x="240" y="709" width="18" height="14" rx="3" fill="#f3f4f6" stroke="#6b7280"/>
+    <text x="266" y="721">shared, changed only when both teams agree</text>
+    <line x1="40" y1="751" x2="80" y2="751" stroke="#1f2937" stroke-width="1.6" marker-end="url(#arrow)"/>
+    <text x="90" y="755">calls, or sends data</text>
+    <line x1="240" y1="751" x2="280" y2="751" stroke="#6b7280" stroke-width="1.4" stroke-dasharray="5 4" marker-end="url(#arrowGrey)"/>
+    <text x="290" y="755">fallback, only while the real engine was missing</text>
+    <text x="40" y="785">solvers.py never calls Team A's code: it only answers the call. Both engines follow contract.py, so Team A's code works with either.</text>
+    <text x="40" y="805">routes.py also saves and reads data through repositories.py directly. That link skips the contract on purpose (see §3.2).</text>
+  </g>
+</svg>
