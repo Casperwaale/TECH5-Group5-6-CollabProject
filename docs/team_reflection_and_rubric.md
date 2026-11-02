@@ -1,79 +1,86 @@
 # TECH5 Collaborative Project: Team Reflection, SDLC & Rubric Assessment
 
+Group 5-6. All pull request (PR) numbers and dates are from `git log` on `main`.
+
 ## 1. Collaborative Development & Component Division
 
-To mirror professional software engineering and collaborative systems delivery, the project was organized into two specialized cross-functional development teams adhering strictly to the assignment specifications:
-
 ### 1.1 Team A: Visualization and Recommendation Component
-- **Package**: `app/visualization`
-- **Core Responsibilities**:
-  - Full-stack Flask web interface architecture with responsive, accessible Jinja2 HTML5/CSS3 templates.
-  - Interactive data management forms allowing coordinators and administrators to enter, edit, inspect, and load students, projects, skills, preferences, and fixed assignment locks without raw JSON or manual file editing.
-  - Implementation of Role-Based Access Control (RBAC) with runtime role switching (`Administrator`, `Programme Coordinator`, `Student Viewer`).
-  - Interactive decision support workflows: side-by-side solution comparison with visual deltas ($\Delta$ skill fit, $\Delta$ rank, $\Delta$ Gini), student re-allocation tracking, and inspectable evidence-based recommendations.
-  - Interactive workflow for pinning/updating fixed assignments and triggering immediate re-runs.
-  - Pre-packaged reproducible benchmark scenario loaders for standard trade-offs, fixed locks, capacity deficits, and contradictory constraints.
+Area: `app/visualization/` and its tests.
+
+- **Alex Solheim:** skill creation and deletion (#15); Team A notes in `AGENTS.md` (#38).
+- **Herman Kilde:** project create, edit and delete, with one shared form validator `_parse_project_form` (#24); fixed the criteria listed for the balanced recommendation so they match the code (#28).
+- **Nils Lærum Harloff:** side-by-side comparison page with Team A tests (#23); removed the xfail markers from the supplied UI tests (#27); analytical note §5, recommendation rules (#32).
 
 ### 1.2 Team B: Assignment Engine
-- **Package**: `app/engine`
-- **Core Responsibilities**:
-  - Mathematical modeling and formulation of the Student-Project Matching Problem as a multi-objective Integer Linear Program (ILP).
-  - Implementation of solver strategies using the Strategy Pattern: Preference Maximization, Skill Fit Maximization, and Balanced Egalitarian Trade-off.
-  - Generation of distinct Pareto alternatives via integer no-good cuts ($\sum_{(s,p) \in A} x_{s,p} \le |S| - 1$), guaranteeing that alternatives differ for at least one student.
-  - Analytical indicator calculation: Feasibility, Efficiency (mean skill fit, unmet soft requirements), Fairness (mean rank, worst-rank regret, unranked allocations, rank variance, rank Gini coefficient), and Project Capacity Utilization.
-  - Transparent recommendation derivation distinguishing calculated mathematical facts from normative administrative advice across three policy priorities.
-  - Domain validation and structured diagnostics distinguishing input errors, capacity deficits, contradictory locks, and mathematical infeasibility.
+Area: `app/engine/`, `app/domain/validation.py` and their tests.
+
+- **Victor Goller (solver):** working agreement and decisions file (#1); ILP formulation in LaTeX and PDF (#2); setup for Windows and an ILP agent for Claude Code (#3, #4); the solver in small steps: `prepare_data` (#6), `build_model` (#12), `solve_model` (#13), the three strategies (#10) and `execute_run` with the alternatives loop (#11); validation fixes (#25); robustness fixes and decision D16 (#26); infeasibility reasons shown once (#29); analytical note §1, §2, §6, §7 and fixes (#30, #36); demonstration guide (#31); architecture doc and diagrams (#39, #40).
+- **Casper Waale-Andersen (metrics):** Pyomo and highspy dependencies (#5); skill fit (#16), Gini (#17), solution comparison (#18) and all solution indicators (#19); analytical note §3–4 (#20); recorded the instructor approval Q1 and decisions D14 and D15 (#21).
+- **Ole Kristian Skaar (validation and tests):** input validation checks and tests (#7); rejection of duplicate project preferences (#14); activated the solver tests with temporary test databases (#22); Week 3 update of the analytical note and testing documentation, including the edge-case table (#33).
 
 ### 1.3 Contract-First In-Process Collaboration Protocol
-Development proceeded under an agreed **Internal Component Contract** (`app/contract/contract.py`):
-1. **Week 1 Alignment**: Teams A and B jointly defined shared domain models (`app/domain/models.py`), input validation rules (`app/domain/validation.py`), relational database schema (`app/persistence/schema.sql`), and the abstract contract interface (`contract.AssignmentEngineContract`).
-2. **Independent Testability**: Team B implemented the analytical engine adhering strictly to `AssignmentEngineContract`. Team A built the visualization views and workflow using mock contract implementations before final integration.
-3. **In-Process Integration**: Rather than introducing network latency, HTTP serialization overhead, or microservice failure modes, the two components integrate directly in Python: Team A instantiates or receives `solvers.AssignmentEngine()` and communicates through strongly typed dataclass DTOs (`RunRequest`, `ValidationOutcome`, `DiagnosticInfo`, `RunStatus`).
+The teams talk only through `app/contract/contract.py` (`AssignmentEngineContract`) and the domain objects in `app/domain/models.py`. Both run in one Flask process. Changing a shared file (contract, models, `schema.sql`) needs approval from one member of each team. In practice none of the three shared files was changed after the starter commit: the supplied contract was enough for both teams.
 
 ---
 
 ## 2. Software Development Lifecycle (SDLC) & AI Pair Programming
 
 ### 2.1 SDLC Methodology
-The project followed an **Iterative Test-Driven Development (TDD)** lifecycle across three milestones:
-- **Week 1 (Design & Shared Contract)**: Formalized domain entities, 3NF SQLite schema, `AssignmentEngineContract` interface, and input validation.
-- **Week 2 (Core Functionality & Integration)**: Implemented PuLP/CBC ILP solvers, no-good cuts, indicator metrics, repository persistence, recommendation rules, and Flask visualization views. Connected Team A and Team B in-process.
-- **Week 3 (Robustness, Decision Support & Verification)**: Systematically constructed 45 automated unit, database, contract, and end-to-end integration tests covering all 15 edge cases from Section 13. Audited adherence to the Google Python Style Guide.
+We worked in small tasks, each on its own branch and pull request, with the supplied tests as the specification. Week boundaries below are taken from commit dates.
 
-### 2.2 Role and Impact of AI Pair Programming Tools
-Generative AI and agentic pair programming tools were utilized in a disciplined, professional manner:
-- **Architecture Refactoring**: Transitioning the system from an overly complex distributed microservices setup to a clean, highly cohesive two-component in-process architecture mediated by an abstract Python contract.
-- **Mathematical Formulation Verification**: Validating ILP constraints (especially no-good cuts for distinct alternatives and mandatory skill constraints) to ensure correctness before solver execution.
-- **Adversarial Edge Case Synthesis**: Designing test cohorts for corner cases (identical preferences, capacity deficits, contradictory locks, tie-breaking).
-- **Code Quality & Style Adherence**: Ensuring 100% compliance with module-only imports, explicit type hints, Google docstrings, and strict 80-character line limits.
+- **Week 1 (13–21 Oct): rules and model.** The starter package arrived on 14 Oct. Victor proposed a shared working agreement on 15 Oct and audited every Team B choice against the brief, the tests, the schema and the starter docs, which split them into requirements (R1–R17) and real decisions (D). Casper proposed Pyomo + HiGHS, Victor agreed (D1, 19 Oct). Victor drafted the ILP model. Ole wrote the first validation checks.
+- **Week 2 (22–27 Oct): build.** The instructor approved the method on 22 Oct (Q1). Team B merged the solver (#6, #10–#13), validation (#7, #14, #25), metrics (#16–#19) and activated tests (#22). Team A merged skills (#15), the compare view (#23) and projects (#24), and activated the UI tests (#27). D16 was decided on 27 Oct for the Week 2 deadline, after a cross-check of the solver against the metrics and a bad-input sweep (#26).
+- **Week 3 (28 Oct–2 Nov): documentation and polish.** Analytical note sections from both teams (#20, #30, #32, #33, #36), demonstration guide (#31), recommendation criteria fix (#28), architecture doc and diagrams (#39, #40) and Team A notes in `AGENTS.md` (#38).
+
+### 2.2 Communication
+- **`AGENTS.md`** is the working agreement for people and AI agents alike: who owns which files, the shared-file approval rule, the Git workflow, and the output keys each team relies on. Each team wrote its own notes section.
+- **`docs/team_b_decisions.md`** is the single record of Team B's modelling rules. Each item cites its source; each decision has a status, an owner and a date, and a log at the bottom. Agents must read it before engine work and stop and ask if a decision is missing.
+- **Instructor approval (Q1):** the brief requires approval of the method before it becomes the baseline. Professor Julio Goez approved ILP with Pyomo + highspy, including the per-project mandatory-skill rule R13, on 22 Oct.
+
+### 2.3 Git Workflow
+- One branch per task named `<area>/<topic>` (`team-a/...`, `team-b/...`, `setup/...`), one PR per branch filled in from `.github/pull_request_template.md`, review by someone other than the author before merge, and a protected `main`. 35 PRs were merged between 20 Oct and 2 Nov.
+- Usually someone other than the author merged: Casper merged Victor's solver PRs and Victor merged Casper's metrics PRs. Four Team A PRs (#15, #23, #27, #38) were merged by their own author.
+- **Problems.** Several PRs opened against the upstream starter repository (`jcgoez`) by default instead of our fork. PR #32 was merged before it had been reviewed. Some early commits do not follow the `<area>: <message>` format.
+
+### 2.4 AI-Supported Development
+`AGENTS.md` requires AI help to be disclosed in each commit. Commits by Victor, Casper, Alex, Herman and Nils carry `Assisted-by:` or `Co-Authored-By:` lines naming Claude.
+
+- **Casper Waale-Andersen:** I used Claude Code for the metrics work (#16–#19). I gave it one function per prompt and pointed it at the rules it had to follow: the requirement IDs in `team_b_decisions.md` (R4 skill fit, R9 Gini, R11 output keys, R14 unranked rank) and the supplied tests as the specification. I read every diff before committing, checked it against the decision it cited, and ran `pytest -q` before each commit. The AI-assisted commits carry a `Co-Authored-By` line (for example 5fefbbb, a43548b, 93f13c1, dedd3ec), and their messages name the requirement they implement.
+- [Victor Goller: AI use, to be written by Victor Goller]
+- [Ole Kristian Skaar: AI use, to be written by Ole Kristian Skaar]
+- [Alex Solheim: AI use, to be written by Alex Solheim]
+- [Herman Kilde: AI use, to be written by Herman Kilde]
+- [Nils Lærum Harloff: AI use, to be written by Nils Lærum Harloff]
 
 ---
 
 ## 3. Self-Assessment against the 100-Point Grading Rubric
 
-The project is evaluated against the exact 8 assessment categories and weights specified in Section 16 of `projectTech5.tex`:
-
-| Category | Weight | Self-Assessed Score | Justification & Verification Evidence |
-|---|:---:|:---:|---|
-| **1. Business requirements and analytical formulation** | 10% | **10 / 10** | Complete, unambiguous translation into domain models, constraints, and metrics. Formulates ILP with capacity bounds, mandatory skills, fixed locks, and no-good cuts. Documents formal assumptions, recommendation criteria, and analytical limitations (`docs/analytical_formulation.md`). |
-| **2. Object-oriented architecture and Python implementation** | 15% | **15 / 15** | Highly modular design with meaningful classes and strict encapsulation. Employs Strategy Pattern (`AssignmentStrategy`), Repository Pattern (`repositories.py`), Factory Pattern (`create_app`), and Abstract Interface Pattern (`AssignmentEngineContract`). 100% compliant with Google Python Style Guide (imports, type hints, docstrings, $\le$ 80 char lines). |
-| **3. Relational database design and SQL integration** | 15% | **15 / 15** | 3NF normalized SQLite schema with foreign keys (`ON DELETE CASCADE`), CHECK constraints, and unique constraints. Uses WAL journal mode. Features non-trivial analytical SQL queries for capacity utilization, skill gap analysis, rank distribution, and cross-solution student diffs (`docs/database_design.md`). |
-| **4. Assignment Engine functionality and analytical quality** | 20% | **20 / 20** | PuLP/CBC ILP engine generates complete, valid allocations. Preserves fixed locks, enforces mandatory skills, generates genuinely distinct Pareto alternatives, computes comprehensive efficiency and fairness indicators (including Gini coefficient and rank variance), and provides structured diagnostics on failure. |
-| **5. Visualization, recommendations, and interaction** | 15% | **15 / 15** | Clean Flask web UI with full data management workflows. Provides side-by-side solution comparisons with visual deltas, student re-allocation tracking, interactive "pin lock & re-run" capabilities, and inspectable recommendations that separate calculated evidence from advice across three policy priorities. |
-| **6. Component contract and end-to-end integration** | 10% | **10 / 10** | Rigorous abstract contract (`contract.AssignmentEngineContract`) with strongly typed DTOs. Seamless in-process integration between `app/visualization` and `app/engine`. Fully verified by dedicated contract tests (`test_contract_and_engine.py`) and end-to-end integration tests (`test_component_integration.py`). |
-| **7. Testing, error handling, and robustness** | 10% | **10 / 10** | 45 automated pytest tests with 100% pass rate in ~4.4s. Systematic testing across all 15 edge cases from Section 13 (tied preferences, missing skills, capacity deficits, contradictory locks, infeasibility, solver timeouts). Structured error reporting in UI. |
-| **8. Git collaboration, SDLC practice, and team process** | 5% | **5 / 5** | Well-defined 3-week SDLC milestone plan, contract-first design protocol, clear separation of Team A and Team B responsibilities, and disciplined branch/merge review process. |
-| **Total** | **100%** | **100 / 100** | **Exemplary Instructor Reference Implementation** |
+| Category | Weight | Assessment |
+|---|:---:|---|
+| **1. Business requirements and analytical formulation** | 10% | Every rule is traced to the brief, tests, schema or starter docs (R1–R17), and the ILP model, indicators, recommendation rules and limitations are written out in `docs/analytical_note.md` and `docs/model/ilp_formulation.tex`. |
+| **2. Object-oriented architecture and Python implementation** | 15% | We kept the starter's structure and filled in the strategy pattern with three solver classes over one shared model; the only interface change was the strategy method's arguments (D14). |
+| **3. Relational database design and SQL integration** | 15% | We used the supplied schema unchanged, so our own database work is limited to working within its constraints (for example D16 for uncatalogued skills and temporary databases in tests). |
+| **4. Assignment Engine functionality and analytical quality** | 20% | The engine never relaxes a hard constraint, proves when no further distinct alternative exists, and reports infeasibility with reasons; known gaps are no solver time limit and an inexact tie-break in SKILL_FIT (note §7). |
+| **5. Visualization, recommendations, and interaction** | 15% | Team A built skill and project management and the comparison page on top of the starter UI, and corrected the recommendation criteria so the page shows what the code uses. |
+| **6. Component contract and end-to-end integration** | 10% | The real engine replaced the stubs without any change to the contract or domain objects, and the full test suite passes against it. |
+| **7. Testing, error handling, and robustness** | 10% | All 75 tests pass with no xfail left, all 15 edge cases have a test, and a bad-input sweep led to the D16 fixes. |
+| **8. Git collaboration, SDLC practice, and team process** | 5% | One branch and one reviewed PR per task worked well overall, but PR #32 was merged before review and several PRs first went to the upstream repository. |
 
 ---
 
 ## 4. Key Lessons Learned & Future Extensions
 
-1. **Simplicity Over Architectural Over-Engineering**:
-   Transitioning from distributed microservices to an in-process contract eliminated unnecessary HTTP serialization, network latency, and service orchestration complexities, allowing students to focus on domain modeling, relational database design, and optimization quality.
-2. **Trade-Off Inherent to Multi-Objective Optimization**:
-   Student preference satisfaction and project skill fit are frequently in direct tension. Providing transparent Pareto alternatives and side-by-side deltas empowers human decision-makers (course coordinators) to balance student happiness against project quality.
-3. **Value of Administrative Locks with Re-Solving**:
-   Real-world university assignment requires accommodating special circumstances (sponsorships, disabilities, exchange agreements). Allowing coordinators to lock a student and re-run with guaranteed constraint preservation while observing peer displacement is one of the most valued DSS features.
-4. **Separating Evidence from Normative Advice**:
-   A key decision-support principle is transparency: the recommendation engine never dictates a single "black-box" choice. Instead, it computes objective mathematical evidence (average rank, Gini coefficient, skill fit) and pairs it with policy-oriented advice for different organizational priorities.
+1. **Refactoring the tests along with the code.** Some supplied tests asserted that the engine was still a stub. When the stubs were replaced, we rewrote those checks to test the real behaviour (R8, recorded before any test was changed) and removed the xfail markers as each feature landed (#16–#19, #22, #27). Writing the rule down first kept the test changes honest.
+2. **The contract made parallel work possible.** Team A built the pages against `MockAssignmentEngine` while Team B built the real engine. When the engine was ready, nothing in the contract or the domain objects had to change.
+3. **Cross-checking components finds bugs that unit tests miss.** Comparing the solver with the metrics code found that rank gaps after a project deletion made the two disagree, and a bad-input sweep found a crash on uncatalogued skills (D16).
+4. **Writing decisions down saves arguments later.** Auditing every choice against all sources turned most "decisions" into requirements we could cite, and the few real decisions have an owner and a date.
+5. **Process slips happen under deadline.** Merging #32 before review and PRs going to the upstream repository show that the workflow needs checking on every PR, not just agreeing on once.
+
+Personal lessons:
+- [Alex Solheim: personal lessons, to be written by Alex Solheim]
+- [Herman Kilde: personal lessons, to be written by Herman Kilde]
+- [Nils Lærum Harloff: personal lessons, to be written by Nils Lærum Harloff]
+- [Victor Goller: personal lessons, to be written by Victor Goller]
+- [Casper Waale-Andersen: personal lessons, to be written by Casper Waale-Andersen]
+- [Ole Kristian Skaar: personal lessons, to be written by Ole Kristian Skaar]
