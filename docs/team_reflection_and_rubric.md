@@ -100,6 +100,11 @@ Personal lessons:
 - [Alex Solheim: personal lessons, to be written by Alex Solheim]
 - [Herman Kilde: personal lessons, to be written by Herman Kilde]
 - [Nils Lærum Harloff: personal lessons, to be written by Nils Lærum Harloff]
-- [Victor Goller: personal lessons, to be written by Victor Goller]
+- **Victor Goller:**
+  - **A correct model is not yet a working product.** The ILP was right on paper, but a sweep of bad inputs still found three bugs. Handling wrong data and reporting infeasibility clearly needed as much care as the model itself.
+  - **Write code I can defend line by line.** I kept the solver to the TECH4 constructs I know, even where shorter Python existed. In a review or a presentation I can explain every line.
+  - **Small pull requests, straight to `main`.** One PR per solver step kept each review short. Stacking PRs on top of each other saved no time and caused two wrong merges.
+  - **Git and GitHub at a larger scale.** I had used Git before, but never this much: a branch, a pull request and a review for every change. It felt slow at first, but the history now shows who did what and why. I also learned that pull requests from a fork default to the upstream repository, so the target has to be checked every time.
+  - **Check documentation against the code, as with tests.** The starter docs described PuLP/CBC and a different architecture, and our own diagrams had to be checked against the real classes. Documentation drifts unless someone checks it.
 - [Casper Waale-Andersen: personal lessons, to be written by Casper Waale-Andersen]
 - [Ole Kristian Skaar: personal lessons, to be written by Ole Kristian Skaar]
