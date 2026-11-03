@@ -66,7 +66,9 @@ We worked in small tasks, each on its own branch and pull request, with the supp
   - AI was fast and reliable at routine work: Git, formatting, documentation and consistency checks. It was weaker at knowing what had already been decided, unless it was pointed to the sources.
   - Rules written once in a file worked better than repeating instructions in every prompt.
 
-- [Ole Kristian Skaar: AI use, to be written by Ole Kristian Skaar]
+- 
+- **Ole Kristian Skaar:** I used ChatGPT to assist when I ran into un-anticipated problems. I also used it to identify inconsistencies between the documentation and the implemented application. When problems occurred, such as pull requests targeting the wrong repository or incorrect documentation, I used ChatGPT to understand the cause and work through the corrections.
+
 - **Alex Solheim:** I used Claude mainly as a guide for Git and GitHub and as a checking and validating aid for the Team A work. I had little Git experience before this project, so I asked it to take me through each step of the branch, commit, push, pull request and merge flow, and I ran every command myself in the terminal. It also helped improve and polish the Team A notes in `AGENTS.md` (#38) and helped with the Week 2 report and the PDF version of the analytical note. I read every diff before committing, checked the field names in the notes against `compare.html` and `routes.py`, ran `pytest -q` before each commit, and pulled my teammates' branches to my machine to run the tests and the pages before I approved them. I did not let it change the supplied tests, and I checked its claims against the repository.
 - [Herman Kilde: AI use, to be written by Herman Kilde]
 - [Nils Lærum Harloff: AI use, to be written by Nils Lærum Harloff]
@@ -109,4 +111,6 @@ I learned how to work better as a team, not just our self chosen teams, but also
   - **Check documentation against the code, as with tests.** The starter docs described PuLP/CBC and a different architecture, and our own diagrams had to be checked against the real classes. Documentation drifts unless someone checks it.
 - **Casper Waale-Andersen:** 
 I learned to check the base repository every time I open a pull request: GitHub defaults to the upstream repository (`jcgoez`), and several of our PRs went there by mistake. I also learned not to merge a document that concerns both teams until someone from each team has reviewed it; I merged PR #32 too early. Working in small steps, with one branch and one PR per function, gave us a clean history that makes it easy to see who did what and why. Finally, I got better at prompting Claude Code precisely: pointing it to the requirement IDs and the tests gave much better output than describing the task in general terms.
-- [Ole Kristian Skaar: personal lessons, to be written by Ole Kristian Skaar]
+- 
+- **Ole Kristian Skaar:** I learned how important input validation and automated testing are for ensuring that different parts of an application work correctly together. I also gained practical experience with Git and GitHub, especially after encountering problems with pull requests targeting the wrong repository. Another important lesson was that documentation must be checked against the actual code, as I discovered several inconsistencies between the starter documentation and the completed application.
+
